@@ -1,0 +1,26 @@
+[project]
+name = "mlops"
+version = "0.1.0"
+description = ""
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "cufflinks>=0.17.3",
+    "jupyter>=1.1.1",
+    "lightgbm>=4.6.0",
+    "matplotlib>=3.10.6",
+    "mlflow>=3.3.2",
+    "numpy>=1.24,<2.3",
+    "pandas>=2.3.2",
+    "plotly>=6.3.0",
+    "seaborn>=0.13.2",
+    "scikit-learn>=1.5.2",
+    "xgboost>=2.1.1",
+    "optuna>=3.6.1",
+    "shap==0.48.0",
+    "numba==0.61.2",
+    "llvmlite==0.44.0",
+    "lime>=0.2.0.1",
+    "imbalanced-learn>=0.12.4",
+    "missingno>=0.5.2",
+]
