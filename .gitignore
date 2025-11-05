@@ -148,11 +148,26 @@ mlflow/
 
 # Large data directories
 home-credit-default-risk-DATA/
-data/
 datasets/
 models/
-artifacts/
 model_registry/
+
+# Runtime data directories created locally (retain reference snapshots)
+/data/
+!/data/reference/
+/data/logs/
+/data/metrics/
+!/data/reference/reference_sample.parquet
+!/data/reference/feature_stats.parquet
+!/data/logs/.gitkeep
+!/data/metrics/.gitkeep
+!/data/metrics/daily/.gitkeep
+
+# Production inference artifacts required by API
+/artifacts/
+!/artifacts/feature_defaults.json
+!/artifacts/categorical_mappings.json
+!/artifacts/feature_list.json
 
 # Logs
 *.log

@@ -68,3 +68,10 @@ mlflow ui --backend-store-uri file:./mlruns -p 5000  # optional
 - Artifacts: dataset samples, feature importance plots, SHAP/LIME outputs (when generated)
 - Thresholding: MLflow run “Threshold Optimization” with selected threshold and costs
 - Deployment: `model_registry/registry.json` and latest model pickle show promotion
+
+## Production Deployment (Part 2)
+- FastAPI scoring service in `api/` with JSONL logging (`data/logs/`) and metrics aggregation.
+- Gradio manual tester (`python -m api.gradio_ui`) for curated, human-driven scoring checks.
+- Streamlit monitoring app in `monitor/` with Evidently drift report generation and latency/score dashboards.
+- Docker images: `Dockerfile` (API) and `Dockerfile.monitor` (dashboard) for container deployments and Hugging Face Spaces integration.
+- Automated CI/CD via `.github/workflows/ci.yml` (lint, pytest, docker build) and `deploy_spaces.yml` (Spaces push using HF secrets).

@@ -3,13 +3,13 @@ Industrialization module for model deployment and production.
 Includes model registry, deployment scripts, and monitoring setup.
 """
 
+import json
+import logging
 import os
 import pickle
-import json
 from datetime import datetime
-from typing import Dict, Any, Optional, List, Union
-import logging
-import subprocess
+from typing import Any, Dict, List, Optional
+
 import numpy as np
 
 try:

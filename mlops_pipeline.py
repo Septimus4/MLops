@@ -7,11 +7,11 @@ Combines pipeline orchestration, verification, and quick test utilities.
 
 import sys
 import os
+import argparse
 import logging
 import time
 import json
 from pathlib import Path
-import numpy as np
 
 # Add src to path
 sys.path.append(str(Path(__file__).parent / "src"))
@@ -133,7 +133,7 @@ class MLOpsPipeline:
             else:
                 trained_models, cv_results = self.run_model_training(X_train, y_train, X_val, y_val)
                 best_params = self.run_hyperparameter_optimization(X_train, y_train)
-            comparison_df = self.run_model_explainability(trained_models, X_train, feature_names)
+            self.run_model_explainability(trained_models, X_train, feature_names)
             best_model_name, best_model, best_score = self.select_best_model(cv_results, trained_models)
 
             # Business threshold optimization (FN cost > FP cost)
@@ -226,7 +226,7 @@ def test_optimized_pipeline():
     X, y, feature_names = data_preprocessor.prepare_main_dataset(sample_size=0.3)
     X_train, X_val, X_test, y_train, y_val, y_test = data_preprocessor.create_train_val_test_split(X, y, test_size=0.2, val_size=0.2)
     trained_models = model_trainer.train_all_models(X_train, y_train, X_val, y_val)
-    cv_result = model_trainer.cross_validate_model('lightgbm', X_train, y_train)
+    model_trainer.cross_validate_model('lightgbm', X_train, y_train)
     end_time = time.time()
     total_time = end_time - start_time
     logger.info(f"Training completed successfully with {len(trained_models)} models")
@@ -260,8 +260,81 @@ class MLOpsPipelineVerifier:
             return {'status': 'FAILED', 'error': str(e)}
 
 def main():
-    """Main function to run the unified MLOps pipeline."""
-    data_dir = "home-credit-default-risk-DATA"
+    """Main function to run the unified MLOps pipeline or explainability-only stage."""
+
+    parser = argparse.ArgumentParser(description="Unified MLOps pipeline")
+    subparsers = parser.add_subparsers(dest="cmd", help="Command to run")
+
+    # Full pipeline (default)
+    full_p = subparsers.add_parser("full", help="Run the full pipeline (default)")
+    full_p.add_argument("--data-dir", default="home-credit-default-risk-DATA", help="Path to data directory")
+
+    # Explainability-only
+    exp_p = subparsers.add_parser("explain", help="Run only explainability: prep + (subset) train + SHAP/LIME")
+    exp_p.add_argument("--data-dir", default="home-credit-default-risk-DATA", help="Path to data directory")
+    exp_p.add_argument("--sample-size", type=float, default=0.1, help="Fraction of data to sample for speed (0-1]")
+    exp_p.add_argument(
+        "--models",
+        default=None,
+        help="Comma-separated subset to train: logistic_regression,random_forest,lightgbm,xgboost,mlp"
+    )
+    exp_p.add_argument("--explain-sample-size", type=int, default=500, help="Rows to use for SHAP/LIME (smaller = faster)")
+
+    args = parser.parse_args()
+
+    # Default to full if no subcommand provided
+    cmd = args.cmd or "full"
+
+    if cmd == "explain":
+        data_dir = args.data_dir
+        if not os.path.exists(data_dir):
+            logger.error(f"Data directory {data_dir} not found!")
+            sys.exit(1)
+
+        pipeline = MLOpsPipeline(data_dir=data_dir)
+        # Data prep (reduced sample by default for speed)
+        X_train, X_val, X_test, y_train, y_val, y_test, feature_names = pipeline.run_data_preparation(
+            sample_size=args.sample_size
+        )
+
+        # Train subset or all
+        models = {}
+        if args.models:
+            requested = [m.strip() for m in args.models.split(',') if m.strip()]
+            logger.info(f"Training subset for explainability: {requested}")
+            # Use direct train_* methods to avoid unnecessary CV
+            mt = pipeline.model_trainer
+            for name in requested:
+                if name == 'logistic_regression':
+                    models[name] = mt.train_logistic_regression(X_train, y_train, X_val, y_val, start_mlflow_run=False)
+                elif name == 'random_forest':
+                    models[name] = mt.train_random_forest(X_train, y_train, X_val, y_val, start_mlflow_run=False)
+                elif name == 'lightgbm':
+                    models[name] = mt.train_lightgbm(X_train, y_train, X_val, y_val, start_mlflow_run=False)
+                elif name == 'xgboost':
+                    models[name] = mt.train_xgboost(X_train, y_train, X_val, y_val, start_mlflow_run=False)
+                elif name == 'mlp':
+                    models[name] = mt.train_mlp(X_train, y_train, X_val, y_val, start_mlflow_run=False)
+                else:
+                    logger.warning(f"Unknown model '{name}' requested; skipping.")
+        else:
+            models, _ = pipeline.run_model_training(X_train, y_train, X_val, y_val)
+
+        # Run explainability on sampled training features for speed
+        if len(X_train) > args.explain_sample_size:
+            X_for_explain = X_train.sample(args.explain_sample_size, random_state=42)
+        else:
+            X_for_explain = X_train
+        comparison_df = pipeline.run_model_explainability(models, X_for_explain, feature_names)
+        print("Explainability run complete. Check MLflow for 'SHAP Model Comparison' artifacts.")
+        if comparison_df is not None:
+            print("Top 10 combined features:\n", comparison_df.head(10))
+        return {
+            'comparison': comparison_df.head(10).to_dict() if comparison_df is not None else None
+        }
+
+    # Fallback: run full pipeline
+    data_dir = args.data_dir if hasattr(args, 'data_dir') else "home-credit-default-risk-DATA"
     if not os.path.exists(data_dir):
         logger.error(f"Data directory {data_dir} not found!")
         sys.exit(1)
@@ -273,11 +346,6 @@ def main():
     print(f"Best Model: {results['best_model_name']}")
     print(f"Deployment: {'Successful' if results['deployment_success'] else 'Failed'}")
     print("="*60)
-    # Optionally run quick test
-    # test_optimized_pipeline()
-    # Optionally run verification
-    # verifier = MLOpsPipelineVerifier()
-    # verifier.run_full_verification()
     return results
 
 if __name__ == "__main__":

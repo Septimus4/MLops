@@ -3,14 +3,13 @@ Data preparation module for Home Credit Default Risk prediction.
 Handles data loading, preprocessing, feature engineering, and train/val/test splits.
 """
 
-import pandas as pd
-import numpy as np
-from sklearn.preprocessing import LabelEncoder, OneHotEncoder
-from sklearn.model_selection import train_test_split
-import scipy.sparse as sp
 import logging
 import os
 from typing import Optional
+
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)

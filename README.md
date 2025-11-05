@@ -2,6 +2,81 @@
 
 End-to-end, MLflow-tracked MLOps pipeline for the Home Credit Default Risk problem. The pipeline covers data prep, model training with CV, hyperparameter optimization, explainability, business-aligned thresholding, and lightweight deployment to a local model registry.
 
+## Production Scoring Deployment
+
+Part 2 extends the project with a deployable scoring stack:
+- **FastAPI service** in `api/app.py` with `/health`, `/predict`, and `/metrics` routes. The model is loaded once via `api/model_loader.py` and predictions are validated with Pydantic schemas.
+- **Structured logging**: every request is stored as JSONL in `data/logs/YYYY-MM-DD.jsonl` with raw inputs, engineered features, latency, and the decision. Daily compaction to Parquet is handled by `scripts/compaction.py`.
+- **Manual testing UI**: `api/gradio_ui.py` wraps the same inference path in a Gradio Blocks interface for quick human-in-the-loop checks.
+- **Monitoring dashboard**: `monitor/app.py` (Streamlit) visualises latency, approval rates, score histograms, and embeds Evidently drift reports generated through `monitor/drift_report.py`.
+- **CI/CD**: GitHub Actions (`.github/workflows/ci.yml`) runs linting, tests, and Docker builds. `deploy_spaces.yml` pushes slim artefacts to Hugging Face Spaces (Docker) for API and monitoring deployments once the required secrets are configured.
+- **Artifacts**: `artifacts/feature_defaults.json`, `categorical_mappings.json`, and `feature_list.json` capture the training schema for inference; `data/reference/` stores the drift reference sample and feature statistics.
+
+## API Quick Start
+
+```zsh
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn api.app:app --host 0.0.0.0 --port 8080
+```
+
+Send a smoke request:
+
+```zsh
+python -m scripts.smoke_predict --url http://localhost:8080/predict
+```
+
+- Interactive Swagger UI: `http://localhost:8080/docs`
+- Gradio manual tester: `python -m api.gradio_ui`
+- Metrics snapshot: `http://localhost:8080/metrics`
+
+### Runtime directories
+
+- Logs: `data/logs/` (JSONL, rotated daily)
+- Aggregations & drift artefacts: `data/metrics/`
+- Reference slice used by Evidently: `data/reference/`
+
+These folders are created automatically at startup. Only reference snapshots are versioned; operational files remain local.
+
+## Monitoring & Drift Dashboard
+
+```zsh
+pip install -r requirements-monitor.txt
+streamlit run monitor/app.py
+```
+
+- Loads the latest JSONL logs (last 7 days by default)
+- Shows latency trend (15-minute buckets), score distribution, request/error counts
+- “Run drift report” executes Evidently’s `DataDriftPreset` against the reference sample and embeds the HTML report inline
+
+## Docker Images
+
+- `Dockerfile`: multi-stage FastAPI image (`uvicorn api.app:app` on port 8080)
+- `Dockerfile.monitor`: Streamlit dashboard exposed on port 7860
+
+Build locally:
+
+```zsh
+docker build -t scoring-api .
+docker run -p 8080:8080 scoring-api
+
+docker build -t scoring-monitor -f Dockerfile.monitor .
+docker run -p 7860:7860 scoring-monitor
+```
+
+## CI/CD
+
+- `ci.yml`: lint with Ruff, run pytest + coverage, build both Docker images
+- `deploy_spaces.yml`: expects `HF_TOKEN`, `HF_API_SPACE`, `HF_MONITOR_SPACE`; uploads minimal folders to Hugging Face Spaces (Docker SDK)
+- Secrets should be configured in repository settings. The workflow intentionally keeps deployment separate from CI to simplify local iteration.
+
+## Data Logging & Retention
+
+- Prediction log schema: `{timestamp, request_id, applicant_id?, status, latency_ms, score, binary_decision, threshold, input_features, processed_features, monitor_features}`
+- Reference defaults and categorical encoders are regenerated via `python -m scripts.make_reference_snapshot` if training data shifts.
+- `scripts/compaction.py` converts JSONL logs to partitioned Parquet in `data/metrics/daily/` for analytics notebooks.
+
 ## Quick Start
 
 ```zsh

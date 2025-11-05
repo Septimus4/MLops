@@ -1,6 +1,5 @@
 import numpy as np
-import pandas as pd
-from sklearn.metrics import precision_recall_curve, average_precision_score, confusion_matrix
+from sklearn.metrics import average_precision_score, confusion_matrix, precision_recall_curve
 
 
 def optimize_threshold_by_cost(y_true: np.ndarray, y_proba: np.ndarray,

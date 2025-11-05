@@ -2,15 +2,15 @@
 MLflow configuration and utilities for experiment tracking.
 """
 
+import logging
+import os
+from typing import Any, Dict, Optional
+
 import mlflow
-import mlflow.sklearn as mlflow_sklearn
 import mlflow.lightgbm as mlflow_lgb
+import mlflow.sklearn as mlflow_sklearn
 import mlflow.xgboost as mlflow_xgb
 from mlflow.models.signature import infer_signature
-from typing import Tuple
-import os
-from typing import Dict, Any, Optional
-import logging
 
 logger = logging.getLogger(__name__)
 

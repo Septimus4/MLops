@@ -3,13 +3,13 @@ Explainability module for model interpretations using SHAP and LIME.
 Provides global and local explanations for model predictions.
 """
 
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-from typing import Dict, Any, List, Optional, Union
 import logging
 import os
+from typing import Any, Dict, List, Optional
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 
 try:
     import shap
@@ -71,22 +71,33 @@ class ModelExplainer:
 
         try:
             if model_type == 'tree':
-                self.shap_explainer = shap.TreeExplainer(model)
+                try:
+                    # Prefer generic Explainer with background data when available
+                    self.shap_explainer = shap.Explainer(model, X_background)
+                except Exception:
+                    # Fallback to TreeExplainer without background
+                    self.shap_explainer = shap.TreeExplainer(model)
             elif model_type == 'linear':
                 self.shap_explainer = shap.LinearExplainer(model, X_background)
             elif model_type == 'deep':
                 self.shap_explainer = shap.DeepExplainer(model, X_background)
             else:
-                # Use permutation explainer as fallback
-                self.shap_explainer = shap.PermutationExplainer(model.predict_proba, X_background,
-                                                              max_evals=max_evals)
+                # Use permutation explainer as generic fallback
+                f = model.predict_proba if hasattr(model, 'predict_proba') else model.predict
+                self.shap_explainer = shap.PermutationExplainer(f, X_background, max_evals=max_evals)
 
             logger.info("SHAP explainer created successfully")
             return self.shap_explainer
 
         except Exception as e:
-            logger.error(f"Failed to create SHAP explainer: {e}")
-            return None
+            logger.warning(f"Primary SHAP explainer creation failed ({e}); falling back to permutation explainer.")
+            try:
+                f = model.predict_proba if hasattr(model, 'predict_proba') else model.predict
+                self.shap_explainer = shap.PermutationExplainer(f, X_background, max_evals=max_evals)
+                return self.shap_explainer
+            except Exception as e2:
+                logger.error(f"Failed to create any SHAP explainer: {e2}")
+                return None
 
     def create_lime_explainer(self, X_train: pd.DataFrame, feature_names: Optional[List[str]] = None,
                             categorical_features: Optional[List[int]] = None, verbose: bool = False):
@@ -151,13 +162,17 @@ class ModelExplainer:
                 return None
 
             # Calculate SHAP values
-            if hasattr(model, 'predict_proba'):
-                shap_values = self.shap_explainer.shap_values(X_instance)
-                # For binary classification, shap_values might be a list
-                if isinstance(shap_values, list):
-                    shap_values = shap_values[1]  # Take positive class
-            else:
-                shap_values = self.shap_explainer.shap_values(X_instance)
+            shap_values = self.shap_explainer.shap_values(X_instance)
+            # Normalize SHAP return types
+            try:
+                # shap.Explainer may return an Explanation
+                if hasattr(shap_values, 'values'):
+                    shap_values = shap_values.values
+            except Exception:
+                pass
+            # For binary classifiers, some explainers return a list per class
+            if isinstance(shap_values, list):
+                shap_values = shap_values[1]
 
             # Get feature importance
             feature_importance = np.abs(shap_values).mean(axis=0)
@@ -264,8 +279,20 @@ class ModelExplainer:
                 return None
 
             # Calculate SHAP values
-            shap_values = explainer.shap_values(X_sample)
+            try:
+                shap_values = explainer.shap_values(X_sample)
+            except Exception as e:
+                logger.warning(f"SHAP values failed with primary explainer ({e}); using permutation fallback.")
+                f = model.predict_proba if hasattr(model, 'predict_proba') else model.predict
+                perm_explainer = shap.PermutationExplainer(f, X_background, max_evals=max_evals)
+                shap_values = perm_explainer(X_sample).values
 
+            # Normalize SHAP return types
+            try:
+                if hasattr(shap_values, 'values'):
+                    shap_values = shap_values.values
+            except Exception:
+                pass
             if isinstance(shap_values, list):
                 shap_values = shap_values[1]
 
@@ -391,6 +418,12 @@ class ModelExplainer:
 
                 if importance_df is not None:
                     importance_results[model_name] = importance_df.set_index('feature')['importance']
+                else:
+                    # Fallback: use model-native feature importance so chart isn't empty
+                    fallback_df = self._fallback_feature_importance(model, X_data.columns.tolist(), model_name)
+                    if fallback_df is not None and not fallback_df.empty:
+                        logger.warning(f"Using fallback feature importance for {model_name}")
+                        importance_results[model_name] = fallback_df.set_index('feature')['importance']
 
             if not importance_results:
                 return None
@@ -423,6 +456,48 @@ class ModelExplainer:
 
         except Exception as e:
             logger.error(f"Failed to compare models with SHAP: {e}")
+            return None
+
+    def _fallback_feature_importance(self, model: Any, feature_names: List[str], model_name: str) -> Optional[pd.DataFrame]:
+        """
+        Compute a best-effort feature importance when SHAP is unavailable or fails.
+        Supports RandomForest, LightGBM, XGBoost, and Linear models.
+        """
+        try:
+            importance = None
+            if hasattr(model, 'feature_importances_'):
+                importance = getattr(model, 'feature_importances_')
+            elif hasattr(model, 'feature_importance'):
+                # LightGBM Booster
+                importance = model.feature_importance(importance_type='gain')
+            elif hasattr(model, 'get_score'):
+                # XGBoost Booster returns dict keyed by feature index/names
+                score_dict = model.get_score(importance_type='gain')
+                importance = np.array([score_dict.get(f, 0.0) for f in feature_names])
+            elif hasattr(model, 'coef_'):
+                coef = getattr(model, 'coef_', None)
+                if coef is not None:
+                    importance = np.abs(np.ravel(coef))
+
+            if importance is None:
+                return None
+
+            # Align length
+            importance = np.asarray(importance).astype(float)
+            if len(importance) != len(feature_names):
+                # Pad or truncate to match feature names length
+                if len(importance) < len(feature_names):
+                    importance = np.pad(importance, (0, len(feature_names) - len(importance)))
+                else:
+                    importance = importance[:len(feature_names)]
+
+            df = pd.DataFrame({
+                'feature': feature_names,
+                'importance': importance
+            }).sort_values('importance', ascending=False)
+            return df
+        except Exception as e:
+            logger.warning(f"Fallback importance failed for {model_name}: {e}")
             return None
 
     def explain_model_decision(self, model, X_instance: pd.DataFrame,

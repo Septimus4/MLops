@@ -11,10 +11,11 @@ from sklearn.metrics import roc_auc_score
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.neural_network import MLPClassifier
+import logging
+from typing import Any, Dict, Optional
+
 import lightgbm as lgb
 import xgboost as xgb
-from typing import Dict, Any, Callable, Optional
-import logging
 
 try:
     from training.mlflow_config import MLflowManager

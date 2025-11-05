@@ -35,3 +35,10 @@
 - MLflow runs: `mlruns/` or UI shows parameters, metrics, and artifacts per stage
 - Model signatures: check model artifacts in MLflow; input example logged
 - Registry: `model_registry/registry.json`, latest `home_credit_model_v_*.pkl`, and `best_model_summary.json`
+
+## Step 5 – Deploy, Monitor, and Operate (Part 2)
+- Serving: `api/app.py` (FastAPI) + Docker (`Dockerfile`), loading the latest registry model via `api/model_loader.py`.
+- Manual tester: `api/gradio_ui.py` (Gradio Blocks) reuses shared inference code for human validation.
+- Monitoring: `monitor/app.py` (Streamlit) with Evidently drift report generation (`monitor/drift_report.py`) and metrics aggregation (`monitor/metrics.py`).
+- Logging & retention: JSONL prediction logs in `data/logs/`, compaction script `scripts/compaction.py`, reference snapshots in `data/reference/`.
+- CI/CD: `.github/workflows/ci.yml` (lint/tests/docker) and `deploy_spaces.yml` (HF Spaces deployment using repo secrets).

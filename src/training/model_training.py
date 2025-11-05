@@ -3,17 +3,18 @@ Model training module for Home Credit Default Risk prediction.
 Implements various ML models with cross-validation and MLflow tracking.
 """
 
+import logging
+from typing import Any, Dict, List, Optional
+
+import lightgbm as lgb
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import StratifiedKFold, cross_val_score
-from sklearn.metrics import roc_auc_score, classification_report, confusion_matrix
-from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.neural_network import MLPClassifier
-import lightgbm as lgb
 import xgboost as xgb
-from typing import Dict, Any, List, Tuple, Optional
-import logging
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import roc_auc_score
+from sklearn.model_selection import StratifiedKFold, cross_val_score
+from sklearn.neural_network import MLPClassifier
 try:
     from training.mlflow_config import MLflowManager
     MLFLOW_AVAILABLE = True
