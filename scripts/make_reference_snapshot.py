@@ -17,11 +17,23 @@ def _write_json(path: Path, payload: Any) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Generate inference artifacts from the training data")
-    parser.add_argument("--data-dir", default="home-credit-default-risk-DATA", help="Directory containing raw datasets")
-    parser.add_argument("--sample-size", type=float, default=0.2, help="Fraction of the dataset to use")
-    parser.add_argument("--artifacts-dir", default="artifacts", help="Directory for inference artifacts")
-    parser.add_argument("--reference-dir", default="data/reference", help="Directory for reference data")
+    parser = argparse.ArgumentParser(
+        description="Generate inference artifacts from the training data"
+    )
+    parser.add_argument(
+        "--data-dir",
+        default="home-credit-default-risk-DATA",
+        help="Directory containing raw datasets",
+    )
+    parser.add_argument(
+        "--sample-size", type=float, default=0.2, help="Fraction of the dataset to use"
+    )
+    parser.add_argument(
+        "--artifacts-dir", default="artifacts", help="Directory for inference artifacts"
+    )
+    parser.add_argument(
+        "--reference-dir", default="data/reference", help="Directory for reference data"
+    )
     args = parser.parse_args()
 
     artifacts_dir = Path(args.artifacts_dir)
@@ -31,20 +43,26 @@ def main() -> None:
 
     preprocessor = DataPreprocessor(data_dir=args.data_dir)
     preprocessor.load_data()
-    X, y, feature_names = preprocessor.prepare_main_dataset(encoding_method="label", sample_size=args.sample_size)
+    X, y, feature_names = preprocessor.prepare_main_dataset(
+        encoding_method="label", sample_size=args.sample_size
+    )
 
     feature_defaults = {}
     for col in X.columns:
         series = X[col]
         if pd.api.types.is_numeric_dtype(series):
-            feature_defaults[col] = float(series.median()) if not series.isna().all() else 0.0
+            feature_defaults[col] = (
+                float(series.median()) if not series.isna().all() else 0.0
+            )
         else:
             feature_defaults[col] = series.mode(dropna=True).iloc[0]
 
     categorical_mappings = {}
     for col, encoder in preprocessor.encoders.items():
         if hasattr(encoder, "classes_"):
-            categorical_mappings[col] = {str(cat): int(idx) for idx, cat in enumerate(encoder.classes_)}
+            categorical_mappings[col] = {
+                str(cat): int(idx) for idx, cat in enumerate(encoder.classes_)
+            }
 
     _write_json(artifacts_dir / "feature_defaults.json", feature_defaults)
     _write_json(artifacts_dir / "categorical_mappings.json", categorical_mappings)
@@ -57,7 +75,9 @@ def main() -> None:
 
     stats = X.describe().transpose()
     stats["missing_fraction"] = X.isna().mean()
-    stats.reset_index().rename(columns={"index": "feature"}).to_parquet(reference_dir / "feature_stats.parquet", index=False)
+    stats.reset_index().rename(columns={"index": "feature"}).to_parquet(
+        reference_dir / "feature_stats.parquet", index=False
+    )
 
     print(f"Artifacts created in {artifacts_dir.resolve()}")
 

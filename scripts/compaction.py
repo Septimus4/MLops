@@ -20,8 +20,12 @@ def compact_logs(log_dir: Path, output_dir: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Compact JSONL logs to Parquet")
-    parser.add_argument("--log-dir", default="data/logs", help="Directory containing JSONL logs")
-    parser.add_argument("--output-dir", default="data/metrics/daily", help="Destination directory")
+    parser.add_argument(
+        "--log-dir", default="data/logs", help="Directory containing JSONL logs"
+    )
+    parser.add_argument(
+        "--output-dir", default="data/metrics/daily", help="Destination directory"
+    )
     args = parser.parse_args()
 
     log_dir = Path(args.log_dir)

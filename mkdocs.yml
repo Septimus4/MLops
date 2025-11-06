@@ -1,0 +1,18 @@
+site_name: Home Credit MLOps Docs
+site_url: ""
+repo_url: https://github.com/  # update with repository URL if available
+theme:
+  name: mkdocs
+nav:
+  - Overview: index.md
+  - Getting Started: getting-started.md
+  - System Architecture: architecture.md
+  - API & UX Guide: api-guide.md
+  - Monitoring & Drift: monitoring.md
+  - Deployment: deployment.md
+  - Data & Artifacts: data-artifacts.md
+  - Testing & CI: testing-ci.md
+  - Requirements Mapping: requirements-mapping.md
+  - OpenAPI Spec: openapi/openapi.json
+plugins:
+  - search

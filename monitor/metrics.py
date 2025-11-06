@@ -20,9 +20,13 @@ def summarise_kpis(df: pd.DataFrame) -> Dict[str, float]:
 
     request_count = len(df)
     error_count = int((df["status"] != "ok").sum()) if "status" in df else 0
-    approvals = int((df["binary_decision"] == 1).sum()) if "binary_decision" in df else 0
+    approvals = (
+        int((df["binary_decision"] == 1).sum()) if "binary_decision" in df else 0
+    )
     approval_rate = approvals / request_count if request_count else 0.0
-    latencies = df["latency_ms"].dropna() if "latency_ms" in df else pd.Series([], dtype=float)
+    latencies = (
+        df["latency_ms"].dropna() if "latency_ms" in df else pd.Series([], dtype=float)
+    )
     scores = df["score"].dropna() if "score" in df else pd.Series([], dtype=float)
 
     avg_latency = float(latencies.mean()) if not latencies.empty else 0.0
@@ -43,7 +47,11 @@ def latency_series(df: pd.DataFrame, freq: str = "15min") -> pd.DataFrame:
     if df.empty or "timestamp" not in df:
         return pd.DataFrame(columns=["timestamp", "latency_ms"])
     resampled = (
-        df.set_index("timestamp")["latency_ms"].dropna().resample(freq).mean().reset_index()
+        df.set_index("timestamp")["latency_ms"]
+        .dropna()
+        .resample(freq)
+        .mean()
+        .reset_index()
     )
     resampled.rename(columns={"latency_ms": "avg_latency_ms"}, inplace=True)
     return resampled

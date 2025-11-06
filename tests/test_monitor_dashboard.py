@@ -47,6 +47,12 @@ def _build_streamlit_stub() -> types.ModuleType:
         module._button_state = False
         return state
 
+    def warning(message: str, icon: str | None = None):
+        events.append(("warning", message, icon))
+
+    def error(message: str):
+        events.append(("error", message))
+
     module.columns = columns
     module.info = info
     module.line_chart = line_chart
@@ -55,9 +61,13 @@ def _build_streamlit_stub() -> types.ModuleType:
     module.title = title
     module.set_page_config = set_page_config
     module.button = button
+    module.warning = warning
+    module.error = error
     module.components = types.SimpleNamespace(
         v1=types.SimpleNamespace(
-            html=lambda html, height=None, scrolling=None: events.append(("html", len(html)))
+            html=lambda html, height=None, scrolling=None: events.append(
+                ("html", len(html))
+            )
         )
     )
     module._events = events
@@ -92,18 +102,30 @@ def stub_evidently():
         last_run_reference = None
         last_run_current = None
         last_saved_path = None
+        last_summary = None
 
         def __init__(self, metrics):
             FakeReport.last_metrics = metrics
+            self._columns = []
 
         def run(self, reference_data, current_data):
             FakeReport.last_run_reference = reference_data.copy()
             FakeReport.last_run_current = current_data.copy()
+            self._columns = list(current_data.columns)
 
         def save_html(self, path: str):
             destination = Path(path)
             destination.write_text("<html>report</html>", encoding="utf-8")
             FakeReport.last_saved_path = str(destination)
+
+        def as_dict(self):
+            column_metrics = {
+                column: {"drift_detected": True if idx % 2 == 0 else False}
+                for idx, column in enumerate(self._columns)
+            }
+            summary = {"metrics": [{"result": {"column_metrics": column_metrics}}]}
+            FakeReport.last_summary = summary
+            return summary
 
     report_module.Report = FakeReport
 
@@ -180,7 +202,9 @@ def test_load_reference_sample_filters_columns(tmp_path, monkeypatch):
 
     monkeypatch.setattr(data_access.pd, "read_parquet", fake_read_parquet)
 
-    result = data_access.load_reference_sample(path=path, columns=["AMT_INCOME_TOTAL", "CODE_GENDER", "MISSING"])
+    result = data_access.load_reference_sample(
+        path=path, columns=["AMT_INCOME_TOTAL", "CODE_GENDER", "MISSING"]
+    )
 
     assert list(result.columns) == ["AMT_INCOME_TOTAL", "CODE_GENDER"]
     assert len(result) == 2
@@ -214,22 +238,65 @@ def test_make_drift_report_creates_html(tmp_path, monkeypatch, stub_evidently):
     sys.modules.pop("monitor.drift_report", None)
     drift_report = importlib.import_module("monitor.drift_report")
 
-    current = pd.DataFrame({"AMT_INCOME_TOTAL": [1000.0, 1200.0], "EXT_SOURCE_1": [0.1, 0.2]})
-    reference = pd.DataFrame({"AMT_INCOME_TOTAL": [950.0, 1100.0], "EXT_SOURCE_1": [0.15, 0.18]})
+    current = pd.DataFrame(
+        {"AMT_INCOME_TOTAL": [1000.0, 1200.0], "EXT_SOURCE_1": [0.1, 0.2]}
+    )
+    reference = pd.DataFrame(
+        {"AMT_INCOME_TOTAL": [950.0, 1100.0], "EXT_SOURCE_1": [0.15, 0.18]}
+    )
 
-    output = drift_report.make_drift_report(current, reference)
+    output = drift_report.make_drift_report(current, reference, min_rows=1)
 
     assert output.exists()
     assert output.read_text(encoding="utf-8") == "<html>report</html>"
 
     fake_report = stub_evidently
     assert fake_report.last_saved_path == str(output)
-    assert fake_report.last_run_reference.equals(reference[["AMT_INCOME_TOTAL", "EXT_SOURCE_1"]])
-    assert fake_report.last_run_current.equals(current[["AMT_INCOME_TOTAL", "EXT_SOURCE_1"]])
+    assert fake_report.last_run_reference.equals(
+        reference[["AMT_INCOME_TOTAL", "EXT_SOURCE_1"]]
+    )
+    assert fake_report.last_run_current.equals(
+        current[["AMT_INCOME_TOTAL", "EXT_SOURCE_1"]]
+    )
     assert fake_report.last_metrics[0].columns == ["AMT_INCOME_TOTAL", "EXT_SOURCE_1"]
+    summary_path = output.parent / "latest_drift_report.json"
+    assert summary_path.exists()
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert summary["drifted_columns"] == 1
+    assert summary["dropped_features"] == []
+    assert summary["current_row_count"] == 2
+    assert summary["reference_row_count"] == 2
+    assert summary["features"] == ["AMT_INCOME_TOTAL", "EXT_SOURCE_1"]
 
 
-def test_monitor_dashboard_main_renders(tmp_path, monkeypatch, stub_streamlit, stub_evidently):
+def test_make_drift_report_requires_coverage(tmp_path, monkeypatch, stub_evidently):
+    from api import config
+
+    config.get_settings.cache_clear()
+    monkeypatch.setenv("METRICS_DIR", str(tmp_path / "metrics"))
+    monkeypatch.setenv("LOG_DIR", str(tmp_path / "logs"))
+    monkeypatch.setenv("REFERENCE_DIR", str(tmp_path / "reference"))
+
+    sys.modules.pop("monitor.drift_report", None)
+    drift_report = importlib.import_module("monitor.drift_report")
+
+    current = pd.DataFrame(
+        {"AMT_INCOME_TOTAL": [1000.0, None, None], "EXT_SOURCE_1": [0.1, None, None]}
+    )
+    reference = current.copy()
+
+    with pytest.raises(ValueError, match="coverage"):
+        drift_report.make_drift_report(
+            current,
+            reference,
+            min_rows=3,
+            min_feature_coverage=0.75,
+        )
+
+
+def test_monitor_dashboard_main_renders(
+    tmp_path, monkeypatch, stub_streamlit, stub_evidently
+):
     from api import config
 
     config.get_settings.cache_clear()
@@ -241,7 +308,9 @@ def test_monitor_dashboard_main_renders(tmp_path, monkeypatch, stub_streamlit, s
     sys.modules.pop("monitor.app", None)
 
     monitor_app = importlib.import_module("monitor.app")
-    object.__setattr__(monitor_app.settings, "monitor_features", ["AMT_INCOME_TOTAL", "CODE_GENDER"])
+    object.__setattr__(
+        monitor_app.settings, "monitor_features", ["AMT_INCOME_TOTAL", "CODE_GENDER"]
+    )
     features = list(monitor_app.settings.monitor_features)
     timestamps = pd.date_range("2025-01-01", periods=4, freq="h", tz="UTC")
     logs_data = {
@@ -263,9 +332,15 @@ def test_monitor_dashboard_main_renders(tmp_path, monkeypatch, stub_streamlit, s
                 logs_data[feature] = [1.0, 2.0, 3.0, 4.0]
 
     logs_df = pd.DataFrame(logs_data)
-    reference_df = pd.DataFrame({feature: [logs_df[feature].iloc[0]] for feature in features})
+    reference_df = pd.DataFrame(
+        {feature: [logs_df[feature].iloc[0]] for feature in features}
+    )
 
-    monkeypatch.setattr(monitor_app.data_access, "load_logs_df", lambda log_dir=None, max_days=7: logs_df)
+    monkeypatch.setattr(
+        monitor_app.data_access,
+        "load_logs_df",
+        lambda log_dir=None, max_days=7: logs_df,
+    )
     monkeypatch.setattr(
         monitor_app.data_access,
         "load_reference_sample",

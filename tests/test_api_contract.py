@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from api.artifacts import get_feature_defaults
 
 
@@ -23,25 +25,36 @@ def _build_payload() -> dict:
     }
 
 
-def test_health_endpoint(api_client) -> None:
-    response = api_client.get("/health")
+@pytest.mark.anyio("asyncio")
+async def test_health_endpoint(api_client) -> None:
+    response = await api_client.get("/health")
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ok"
     assert body["model_version"]
+    assert body["model_version"] == "v_20251106_103251"
+    assert body["model_path"].endswith(
+        "model_registry/home_credit_model_v_20251106_103251.pkl"
+    )
 
 
-def test_predict_success(api_client) -> None:
+@pytest.mark.anyio("asyncio")
+async def test_predict_success(api_client) -> None:
     payload = _build_payload()
-    response = api_client.post("/predict", json=payload)
+    response = await api_client.post("/predict", json=payload)
     assert response.status_code == 200
     body = response.json()
     assert 0.0 <= body["score"] <= 1.0
     assert body["binary_decision"] in (0, 1)
+    assert body["binary_decision"] == int(body["score"] <= body["threshold"])
 
 
-def test_predict_validation_error(api_client) -> None:
+@pytest.mark.anyio("asyncio")
+async def test_predict_validation_error(api_client) -> None:
     payload = _build_payload()
     payload["features"]["CODE_GENDER"] = "Invalid"
-    response = api_client.post("/predict", json=payload)
+    response = await api_client.post("/predict", json=payload)
     assert response.status_code == 422
+    body = response.json()
+    assert body["request_id"]
+    assert "Unknown category" in body["message"]

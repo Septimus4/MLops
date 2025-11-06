@@ -14,11 +14,15 @@ from mlflow.models.signature import infer_signature
 
 logger = logging.getLogger(__name__)
 
+
 class MLflowManager:
     """Manages MLflow experiment tracking and logging."""
 
-    def __init__(self, experiment_name: str = "Home Credit Default Risk",
-                 tracking_uri: Optional[str] = None):
+    def __init__(
+        self,
+        experiment_name: str = "Home Credit Default Risk",
+        tracking_uri: Optional[str] = None,
+    ):
         """
         Initialize MLflow manager.
 
@@ -52,7 +56,9 @@ class MLflowManager:
         """
         # Auto-nest when a parent run is already active
         active = mlflow.active_run()
-        return mlflow.start_run(run_name=run_name, nested=(nested or active is not None))
+        return mlflow.start_run(
+            run_name=run_name, nested=(nested or active is not None)
+        )
 
     def log_params(self, params: Dict[str, Any]):
         """
@@ -84,7 +90,14 @@ class MLflowManager:
         """
         mlflow.log_artifact(local_path, artifact_path)
 
-    def log_model(self, model, model_name: str, flavor: str = "sklearn", input_example=None, signature=None):
+    def log_model(
+        self,
+        model,
+        model_name: str,
+        flavor: str = "sklearn",
+        input_example=None,
+        signature=None,
+    ):
         """
         Log a model to MLflow.
 
@@ -99,18 +112,23 @@ class MLflowManager:
             if input_example is not None:
                 try:
                     import pandas as pd
+
                     if isinstance(input_example, pd.DataFrame):
-                        int_cols = input_example.select_dtypes(include=["int", "int32", "int64"]).columns
+                        int_cols = input_example.select_dtypes(
+                            include=["int", "int32", "int64"]
+                        ).columns
                         if len(int_cols) > 0:
                             input_example = input_example.copy()
-                            input_example[int_cols] = input_example[int_cols].astype("float64")
+                            input_example[int_cols] = input_example[int_cols].astype(
+                                "float64"
+                            )
                 except Exception:
                     pass
 
             # Infer signature if not provided and input_example available
             if signature is None and input_example is not None:
                 try:
-                    if hasattr(model, 'predict_proba'):
+                    if hasattr(model, "predict_proba"):
                         preds = model.predict_proba(input_example)
                     else:
                         preds = model.predict(input_example)
@@ -147,7 +165,9 @@ class MLflowManager:
             mlflow.log_param("model_flavor", flavor)
             mlflow.log_param("model_name", model_name)
 
-    def log_input_dataset(self, df, name: str = "training_data", context: str = "training"):
+    def log_input_dataset(
+        self, df, name: str = "training_data", context: str = "training"
+    ):
         """
         Log a pandas DataFrame as an MLflow input dataset.
 
@@ -170,8 +190,12 @@ class MLflowManager:
         except Exception as e:
             logger.warning(f"Failed to log dataset: {e}")
 
-    def log_feature_importance(self, feature_names: list, importance_scores: list,
-                              filename: str = "feature_importance.csv"):
+    def log_feature_importance(
+        self,
+        feature_names: list,
+        importance_scores: list,
+        filename: str = "feature_importance.csv",
+    ):
         """
         Log feature importance as an artifact.
 
@@ -182,10 +206,9 @@ class MLflowManager:
         """
         import pandas as pd
 
-        fi_df = pd.DataFrame({
-            'feature': feature_names,
-            'importance': importance_scores
-        }).sort_values('importance', ascending=False)
+        fi_df = pd.DataFrame(
+            {"feature": feature_names, "importance": importance_scores}
+        ).sort_values("importance", ascending=False)
 
         fi_df.to_csv(filename, index=False)
         mlflow.log_artifact(filename)
@@ -194,8 +217,13 @@ class MLflowManager:
         if os.path.exists(filename):
             os.remove(filename)
 
-    def log_classification_report(self, y_true, y_pred, y_pred_proba=None,
-                                filename: str = "classification_report.txt"):
+    def log_classification_report(
+        self,
+        y_true,
+        y_pred,
+        y_pred_proba=None,
+        filename: str = "classification_report.txt",
+    ):
         """
         Log classification report as an artifact.
 
@@ -213,7 +241,7 @@ class MLflowManager:
             auc = roc_auc_score(y_true, y_pred_proba)
             report += f"\nAUC Score: {auc:.4f}"
 
-        with open(filename, 'w') as f:
+        with open(filename, "w") as f:
             f.write(report)
 
         mlflow.log_artifact(filename)
@@ -222,8 +250,9 @@ class MLflowManager:
         if os.path.exists(filename):
             os.remove(filename)
 
-    def log_confusion_matrix_plot(self, y_true, y_pred,
-                                filename: str = "confusion_matrix.png"):
+    def log_confusion_matrix_plot(
+        self, y_true, y_pred, filename: str = "confusion_matrix.png"
+    ):
         """
         Log confusion matrix plot as an artifact.
 
@@ -239,10 +268,10 @@ class MLflowManager:
         cm = confusion_matrix(y_true, y_pred)
 
         plt.figure(figsize=(8, 6))
-        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
-        plt.title('Confusion Matrix')
-        plt.xlabel('Predicted')
-        plt.ylabel('Actual')
+        sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
+        plt.title("Confusion Matrix")
+        plt.xlabel("Predicted")
+        plt.ylabel("Actual")
         plt.savefig(filename)
         plt.close()
 
@@ -262,10 +291,10 @@ class MLflowManager:
         run = mlflow.active_run()
         if run:
             return {
-                'run_id': run.info.run_id,
-                'experiment_id': run.info.experiment_id,
-                'status': run.info.status,
-                'start_time': run.info.start_time
+                "run_id": run.info.run_id,
+                "experiment_id": run.info.experiment_id,
+                "status": run.info.status,
+                "start_time": run.info.start_time,
             }
         return None
 
@@ -283,8 +312,9 @@ class MLflowManager:
         return mlflow.search_runs(
             experiment_names=[self.experiment_name],
             filter_string=filter_string,
-            order_by=order_by
+            order_by=order_by,
         )
+
 
 class ModelTracker:
     """Tracks model performance and metadata."""
@@ -299,8 +329,14 @@ class ModelTracker:
         self.mlflow = mlflow_manager
         self.models = {}
 
-    def track_model(self, model_name: str, model, params: Dict[str, Any],
-                   metrics: Dict[str, Any], flavor: str = "sklearn"):
+    def track_model(
+        self,
+        model_name: str,
+        model,
+        params: Dict[str, Any],
+        metrics: Dict[str, Any],
+        flavor: str = "sklearn",
+    ):
         """
         Track a trained model.
 
@@ -324,10 +360,10 @@ class ModelTracker:
             # Store model info
             run_info = self.mlflow.get_run_info()
             self.models[model_name] = {
-                'run_id': run_info['run_id'] if run_info else None,
-                'params': params,
-                'metrics': metrics,
-                'flavor': flavor
+                "run_id": run_info["run_id"] if run_info else None,
+                "params": params,
+                "metrics": metrics,
+                "flavor": flavor,
             }
 
             logger.info(f"Tracked model: {model_name}")
@@ -348,16 +384,19 @@ class ModelTracker:
 
         comparison_data = []
         for model_name, info in self.models.items():
-            if metric in info['metrics']:
-                comparison_data.append({
-                    'model': model_name,
-                    'metric_value': info['metrics'][metric],
-                    'run_id': info['run_id']
-                })
+            if metric in info["metrics"]:
+                comparison_data.append(
+                    {
+                        "model": model_name,
+                        "metric_value": info["metrics"][metric],
+                        "run_id": info["run_id"],
+                    }
+                )
 
         if comparison_data:
             import pandas as pd
+
             df = pd.DataFrame(comparison_data)
-            return df.sort_values('metric_value', ascending=ascending)
+            return df.sort_values("metric_value", ascending=ascending)
 
         return None

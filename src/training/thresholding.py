@@ -1,9 +1,14 @@
 import numpy as np
-from sklearn.metrics import average_precision_score, confusion_matrix, precision_recall_curve
+from sklearn.metrics import (
+    average_precision_score,
+    confusion_matrix,
+    precision_recall_curve,
+)
 
 
-def optimize_threshold_by_cost(y_true: np.ndarray, y_proba: np.ndarray,
-                               fn_cost: float = 5.0, fp_cost: float = 1.0) -> dict:
+def optimize_threshold_by_cost(
+    y_true: np.ndarray, y_proba: np.ndarray, fn_cost: float = 5.0, fp_cost: float = 1.0
+) -> dict:
     y_true = np.asarray(y_true).ravel()
     y_scores = np.asarray(y_proba).ravel()
 
@@ -23,15 +28,20 @@ def optimize_threshold_by_cost(y_true: np.ndarray, y_proba: np.ndarray,
         rec = (tp / (tp + fn)) if (tp + fn) > 0 else 0.0
         f1 = (2 * prec * rec / (prec + rec)) if (prec + rec) > 0 else 0.0
         costs.append(cost)
-        metrics.append({
-            'threshold': float(t),
-            'cost': float(cost),
-            'precision': float(prec),
-            'recall': float(rec),
-            'f1': float(f1),
-            'pr_auc': float(pr_auc),
-            'tp': int(tp), 'fp': int(fp), 'tn': int(tn), 'fn': int(fn)
-        })
+        metrics.append(
+            {
+                "threshold": float(t),
+                "cost": float(cost),
+                "precision": float(prec),
+                "recall": float(rec),
+                "f1": float(f1),
+                "pr_auc": float(pr_auc),
+                "tp": int(tp),
+                "fp": int(fp),
+                "tn": int(tn),
+                "fn": int(fn),
+            }
+        )
 
     best_idx = int(np.argmin(costs))
     return metrics[best_idx]

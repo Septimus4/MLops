@@ -14,6 +14,7 @@ import numpy as np
 
 try:
     from training.mlflow_config import MLflowManager
+
     MLFLOW_AVAILABLE = True
 except ImportError:
     MLflowManager = None
@@ -21,11 +22,15 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+
 class ModelRegistry:
     """Handles model registration and versioning."""
 
-    def __init__(self, mlflow_manager: Optional[Any] = None,
-                 registry_path: str = "./model_registry"):
+    def __init__(
+        self,
+        mlflow_manager: Optional[Any] = None,
+        registry_path: str = "./model_registry",
+    ):
         """
         Initialize model registry.
 
@@ -46,9 +51,11 @@ class ModelRegistry:
         registry_file = os.path.join(self.registry_path, "registry.json")
         if os.path.exists(registry_file):
             try:
-                with open(registry_file, 'r') as f:
+                with open(registry_file, "r") as f:
                     self.registered_models = json.load(f)
-                logger.info(f"Loaded registry with {len(self.registered_models)} models")
+                logger.info(
+                    f"Loaded registry with {len(self.registered_models)} models"
+                )
             except Exception as e:
                 logger.error(f"Failed to load registry: {e}")
 
@@ -56,13 +63,18 @@ class ModelRegistry:
         """Save registry information."""
         registry_file = os.path.join(self.registry_path, "registry.json")
         try:
-            with open(registry_file, 'w') as f:
+            with open(registry_file, "w") as f:
                 json.dump(self.registered_models, f, indent=2, default=str)
         except Exception as e:
             logger.error(f"Failed to save registry: {e}")
 
-    def register_model(self, model_name: str, model: Any, metadata: Dict[str, Any],
-                      version: Optional[str] = None) -> Optional[str]:
+    def register_model(
+        self,
+        model_name: str,
+        model: Any,
+        metadata: Dict[str, Any],
+        version: Optional[str] = None,
+    ) -> Optional[str]:
         """
         Register a model in the registry.
 
@@ -80,19 +92,19 @@ class ModelRegistry:
             version = f"v_{timestamp}"
 
         model_info = {
-            'name': model_name,
-            'version': version,
-            'registered_at': datetime.now().isoformat(),
-            'metadata': metadata,
-            'status': 'active'
+            "name": model_name,
+            "version": version,
+            "registered_at": datetime.now().isoformat(),
+            "metadata": metadata,
+            "status": "active",
         }
 
         # Save model to disk
         model_path = os.path.join(self.registry_path, f"{model_name}_{version}.pkl")
         try:
-            with open(model_path, 'wb') as f:
+            with open(model_path, "wb") as f:
                 pickle.dump(model, f)
-            model_info['model_path'] = model_path
+            model_info["model_path"] = model_path
             logger.info(f"Model saved to {model_path}")
         except Exception as e:
             logger.error(f"Failed to save model: {e}")
@@ -108,11 +120,13 @@ class ModelRegistry:
         # Log to MLflow
         if self.mlflow:
             with self.mlflow.start_run(run_name=f"Model Registration: {model_name}"):
-                self.mlflow.log_params({
-                    'model_name': model_name,
-                    'version': version,
-                    'registration_time': model_info['registered_at']
-                })
+                self.mlflow.log_params(
+                    {
+                        "model_name": model_name,
+                        "version": version,
+                        "registration_time": model_info["registered_at"],
+                    }
+                )
                 for key, value in metadata.items():
                     if isinstance(value, (int, float)):
                         self.mlflow.log_metrics({key: value})
@@ -122,7 +136,9 @@ class ModelRegistry:
         logger.info(f"Registered model: {model_name} {version}")
         return version
 
-    def get_model(self, model_name: str, version: Optional[str] = None) -> Optional[Any]:
+    def get_model(
+        self, model_name: str, version: Optional[str] = None
+    ) -> Optional[Any]:
         """
         Retrieve a model from the registry.
 
@@ -141,23 +157,23 @@ class ModelRegistry:
 
         if version is None:
             # Get latest version
-            models.sort(key=lambda x: x['registered_at'], reverse=True)
+            models.sort(key=lambda x: x["registered_at"], reverse=True)
             model_info = models[0]
         else:
             # Find specific version
-            model_info = next((m for m in models if m['version'] == version), None)
+            model_info = next((m for m in models if m["version"] == version), None)
 
         if model_info is None:
             logger.error(f"Version {version} not found for model {model_name}")
             return None
 
-        model_path = model_info.get('model_path')
+        model_path = model_info.get("model_path")
         if not model_path or not os.path.exists(model_path):
             logger.error(f"Model file not found: {model_path}")
             return None
 
         try:
-            with open(model_path, 'rb') as f:
+            with open(model_path, "rb") as f:
                 model = pickle.load(f)
             logger.info(f"Loaded model: {model_name} {model_info['version']}")
             return model
@@ -188,24 +204,29 @@ class ModelRegistry:
             return
 
         for model_info in self.registered_models[model_name]:
-            if model_info['version'] == version:
-                model_info['stage'] = stage
-                model_info['promoted_at'] = datetime.now().isoformat()
+            if model_info["version"] == version:
+                model_info["stage"] = stage
+                model_info["promoted_at"] = datetime.now().isoformat()
                 self._save_registry()
 
                 if self.mlflow:
-                    with self.mlflow.start_run(run_name=f"Model Promotion: {model_name}"):
-                        self.mlflow.log_params({
-                            'model_name': model_name,
-                            'version': version,
-                            'stage': stage,
-                            'promotion_time': model_info['promoted_at']
-                        })
+                    with self.mlflow.start_run(
+                        run_name=f"Model Promotion: {model_name}"
+                    ):
+                        self.mlflow.log_params(
+                            {
+                                "model_name": model_name,
+                                "version": version,
+                                "stage": stage,
+                                "promotion_time": model_info["promoted_at"],
+                            }
+                        )
 
                 logger.info(f"Promoted {model_name} {version} to {stage}")
                 return
 
         logger.error(f"Version {version} not found for model {model_name}")
+
 
 class ModelDeployment:
     """Handles model deployment and serving."""
@@ -220,8 +241,12 @@ class ModelDeployment:
         self.registry = model_registry
         self.deployed_models = {}
 
-    def deploy_model(self, model_name: str, version: Optional[str] = None,
-                    deployment_name: Optional[str] = None) -> bool:
+    def deploy_model(
+        self,
+        model_name: str,
+        version: Optional[str] = None,
+        deployment_name: Optional[str] = None,
+    ) -> bool:
         """
         Deploy a model for serving.
 
@@ -241,11 +266,11 @@ class ModelDeployment:
             deployment_name = f"{model_name}_deployment"
 
         self.deployed_models[deployment_name] = {
-            'model_name': model_name,
-            'version': version or 'latest',
-            'model': model,
-            'deployed_at': datetime.now().isoformat(),
-            'status': 'active'
+            "model_name": model_name,
+            "version": version or "latest",
+            "model": model,
+            "deployed_at": datetime.now().isoformat(),
+            "status": "active",
         }
 
         logger.info(f"Deployed model: {deployment_name}")
@@ -267,14 +292,14 @@ class ModelDeployment:
             return None
 
         deployment = self.deployed_models[deployment_name]
-        if deployment['status'] != 'active':
+        if deployment["status"] != "active":
             logger.error(f"Deployment {deployment_name} is not active")
             return None
 
-        model = deployment['model']
+        model = deployment["model"]
 
         try:
-            if hasattr(model, 'predict_proba'):
+            if hasattr(model, "predict_proba"):
                 return model.predict_proba(X)
             else:
                 return model.predict(X)
@@ -289,14 +314,20 @@ class ModelDeployment:
         Returns:
             Dictionary of deployment information
         """
-        return {name: {k: v for k, v in info.items() if k != 'model'}
-                for name, info in self.deployed_models.items()}
+        return {
+            name: {k: v for k, v in info.items() if k != "model"}
+            for name, info in self.deployed_models.items()
+        }
+
 
 class ModelMonitor:
     """Handles model monitoring and performance tracking."""
 
-    def __init__(self, mlflow_manager: Optional[Any] = None,
-                 monitoring_path: str = "./monitoring"):
+    def __init__(
+        self,
+        mlflow_manager: Optional[Any] = None,
+        monitoring_path: str = "./monitoring",
+    ):
         """
         Initialize model monitor.
 
@@ -310,8 +341,14 @@ class ModelMonitor:
 
         os.makedirs(monitoring_path, exist_ok=True)
 
-    def log_prediction(self, deployment_name: str, X: Any, y_pred: Any,
-                      y_true: Any = None, metadata: Optional[Dict[str, Any]] = None):
+    def log_prediction(
+        self,
+        deployment_name: str,
+        X: Any,
+        y_pred: Any,
+        y_true: Any = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ):
         """
         Log a prediction for monitoring.
 
@@ -325,15 +362,19 @@ class ModelMonitor:
         timestamp = datetime.now().isoformat()
 
         log_entry = {
-            'timestamp': timestamp,
-            'deployment': deployment_name,
-            'input_shape': X.shape if hasattr(X, 'shape') else len(X),
-            'prediction_shape': y_pred.shape if hasattr(y_pred, 'shape') else len(y_pred),
-            'metadata': metadata or {}
+            "timestamp": timestamp,
+            "deployment": deployment_name,
+            "input_shape": X.shape if hasattr(X, "shape") else len(X),
+            "prediction_shape": y_pred.shape
+            if hasattr(y_pred, "shape")
+            else len(y_pred),
+            "metadata": metadata or {},
         }
 
         if y_true is not None:
-            log_entry['true_labels'] = y_true.tolist() if hasattr(y_true, 'tolist') else y_true
+            log_entry["true_labels"] = (
+                y_true.tolist() if hasattr(y_true, "tolist") else y_true
+            )
 
         # Store in memory for quick access
         if deployment_name not in self.metrics_history:
@@ -343,16 +384,20 @@ class ModelMonitor:
 
         # Keep only last 1000 entries in memory
         if len(self.metrics_history[deployment_name]) > 1000:
-            self.metrics_history[deployment_name] = self.metrics_history[deployment_name][-1000:]
+            self.metrics_history[deployment_name] = self.metrics_history[
+                deployment_name
+            ][-1000:]
 
         # Log to MLflow if available
         if self.mlflow:
             with self.mlflow.start_run(run_name=f"Prediction Log: {deployment_name}"):
-                self.mlflow.log_params({
-                    'deployment': deployment_name,
-                    'timestamp': timestamp,
-                    'input_shape': str(log_entry['input_shape'])
-                })
+                self.mlflow.log_params(
+                    {
+                        "deployment": deployment_name,
+                        "timestamp": timestamp,
+                        "input_shape": str(log_entry["input_shape"]),
+                    }
+                )
 
     def get_monitoring_stats(self, deployment_name: str) -> Dict[str, Any]:
         """
@@ -370,34 +415,41 @@ class ModelMonitor:
         logs = self.metrics_history[deployment_name]
 
         stats = {
-            'total_predictions': len(logs),
-            'time_range': {
-                'start': logs[0]['timestamp'] if logs else None,
-                'end': logs[-1]['timestamp'] if logs else None
+            "total_predictions": len(logs),
+            "time_range": {
+                "start": logs[0]["timestamp"] if logs else None,
+                "end": logs[-1]["timestamp"] if logs else None,
             },
-            'average_input_shape': None,
-            'average_prediction_shape': None
+            "average_input_shape": None,
+            "average_prediction_shape": None,
         }
 
         # Calculate averages
         if logs:
-            input_shapes = [log['input_shape'] for log in logs if 'input_shape' in log]
-            pred_shapes = [log['prediction_shape'] for log in logs if 'prediction_shape' in log]
+            input_shapes = [log["input_shape"] for log in logs if "input_shape" in log]
+            pred_shapes = [
+                log["prediction_shape"] for log in logs if "prediction_shape" in log
+            ]
 
             if input_shapes:
                 if isinstance(input_shapes[0], tuple):
                     # For multi-dimensional shapes
-                    stats['average_input_shape'] = tuple(np.mean([s for s in input_shapes], axis=0).astype(int))
+                    stats["average_input_shape"] = tuple(
+                        np.mean([s for s in input_shapes], axis=0).astype(int)
+                    )
                 else:
-                    stats['average_input_shape'] = np.mean(input_shapes)
+                    stats["average_input_shape"] = np.mean(input_shapes)
 
             if pred_shapes:
                 if isinstance(pred_shapes[0], tuple):
-                    stats['average_prediction_shape'] = tuple(np.mean([s for s in pred_shapes], axis=0).astype(int))
+                    stats["average_prediction_shape"] = tuple(
+                        np.mean([s for s in pred_shapes], axis=0).astype(int)
+                    )
                 else:
-                    stats['average_prediction_shape'] = np.mean(pred_shapes)
+                    stats["average_prediction_shape"] = np.mean(pred_shapes)
 
         return stats
+
 
 class ProductionPipeline:
     """Complete production pipeline for model serving."""
@@ -432,7 +484,9 @@ class ProductionPipeline:
             return False
 
         # Deploy the model
-        success = self.deployment.deploy_model(self.model_name, version, f"{self.model_name}_prod")
+        success = self.deployment.deploy_model(
+            self.model_name, version, f"{self.model_name}_prod"
+        )
 
         if success:
             logger.info(f"Production pipeline ready for {self.model_name}")
@@ -441,7 +495,9 @@ class ProductionPipeline:
             logger.error(f"Failed to set up production pipeline for {self.model_name}")
             return False
 
-    def predict(self, X: Any, metadata: Optional[Dict[str, Any]] = None) -> Optional[Any]:
+    def predict(
+        self, X: Any, metadata: Optional[Dict[str, Any]] = None
+    ) -> Optional[Any]:
         """
         Make production predictions.
 
@@ -458,8 +514,9 @@ class ProductionPipeline:
 
         if predictions is not None:
             # Log the prediction
-            self.monitor.log_prediction(deployment_name, X, predictions,
-                                      metadata=metadata)
+            self.monitor.log_prediction(
+                deployment_name, X, predictions, metadata=metadata
+            )
 
         return predictions
 

@@ -39,7 +39,10 @@ def get_categorical_mappings() -> Dict[str, Dict[str, int]]:
     settings = get_settings()
     path = Path(settings.categorical_mappings_path)
     raw = _load_json(path)
-    return {column: {label: int(index) for label, index in mapping.items()} for column, mapping in raw.items()}
+    return {
+        column: {label: int(index) for label, index in mapping.items()}
+        for column, mapping in raw.items()
+    }
 
 
 @lru_cache(maxsize=1)

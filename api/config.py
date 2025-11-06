@@ -15,25 +15,43 @@ class Settings(BaseModel):
 
     environment: str = Field(default=os.getenv("APP_ENV", "dev"))
     model_name: str = Field(default=os.getenv("MODEL_NAME", "home_credit_model"))
-    model_version: str | None = Field(default=os.getenv("MODEL_VERSION"))
+    model_version: str | None = Field(
+        default=os.getenv("MODEL_VERSION", "v_20251106_103251")
+    )
     model_path: str | None = Field(default=os.getenv("MODEL_PATH"))
-    model_registry_path: str = Field(default=os.getenv("MODEL_REGISTRY_PATH", "model_registry"))
+    model_registry_path: str = Field(
+        default=os.getenv("MODEL_REGISTRY_PATH", "model_registry")
+    )
     registry_file: str = Field(default=os.getenv("REGISTRY_FILE", "registry.json"))
 
     artifacts_dir: str = Field(default=os.getenv("ARTIFACTS_DIR", "artifacts"))
-    feature_defaults_path: str = Field(default=os.getenv("FEATURE_DEFAULTS_PATH", "artifacts/feature_defaults.json"))
-    categorical_mappings_path: str = Field(default=os.getenv("CATEGORICAL_MAPPINGS_PATH", "artifacts/categorical_mappings.json"))
-    feature_list_path: str = Field(default=os.getenv("FEATURE_LIST_PATH", "artifacts/feature_list.json"))
+    feature_defaults_path: str = Field(
+        default=os.getenv("FEATURE_DEFAULTS_PATH", "artifacts/feature_defaults.json")
+    )
+    categorical_mappings_path: str = Field(
+        default=os.getenv(
+            "CATEGORICAL_MAPPINGS_PATH", "artifacts/categorical_mappings.json"
+        )
+    )
+    feature_list_path: str = Field(
+        default=os.getenv("FEATURE_LIST_PATH", "artifacts/feature_list.json")
+    )
 
     log_dir: str = Field(default=os.getenv("LOG_DIR", "data/logs"))
     metrics_dir: str = Field(default=os.getenv("METRICS_DIR", "data/metrics"))
     reference_dir: str = Field(default=os.getenv("REFERENCE_DIR", "data/reference"))
 
     log_retention_days: int = Field(default=int(os.getenv("LOG_RETENTION_DAYS", "30")))
-    monitor_window_minutes: int = Field(default=int(os.getenv("MONITOR_WINDOW_MINUTES", "1440")))
-    request_timeout_seconds: float = Field(default=float(os.getenv("REQUEST_TIMEOUT_SECONDS", "10")))
+    monitor_window_minutes: int = Field(
+        default=int(os.getenv("MONITOR_WINDOW_MINUTES", "1440"))
+    )
+    request_timeout_seconds: float = Field(
+        default=float(os.getenv("REQUEST_TIMEOUT_SECONDS", "10"))
+    )
 
-    default_threshold: float = Field(default=float(os.getenv("DEFAULT_THRESHOLD", "0.5")))
+    default_threshold: float = Field(
+        default=float(os.getenv("DEFAULT_THRESHOLD", "0.5"))
+    )
     monitor_features: Sequence[str] = Field(
         default=(
             "AMT_INCOME_TOTAL",
@@ -43,15 +61,27 @@ class Settings(BaseModel):
             "CNT_CHILDREN",
             "DAYS_BIRTH",
             "DAYS_EMPLOYED",
+            "DAYS_REGISTRATION",
+            "DAYS_ID_PUBLISH",
             "EXT_SOURCE_1",
             "EXT_SOURCE_2",
             "EXT_SOURCE_3",
             "CREDIT_INCOME_RATIO",
             "ANNUITY_INCOME_RATIO",
             "GOODS_CREDIT_RATIO",
+            "AGE",
+            "YEARS_EMPLOYED",
+            "YEARS_REGISTRATION",
+            "YEARS_ID_PUBLISH",
+            "AMT_REQ_CREDIT_BUREAU_YEAR",
+            "AMT_REQ_CREDIT_BUREAU_QRT",
+            "AMT_REQ_CREDIT_BUREAU_MON",
             "CODE_GENDER",
             "NAME_CONTRACT_TYPE",
         )
+    )
+    monitor_min_sample_size: int = Field(
+        default=int(os.getenv("MONITOR_MIN_SAMPLE_SIZE", "25"))
     )
 
     model_config = ConfigDict(frozen=True)

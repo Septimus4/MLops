@@ -10,6 +10,7 @@ from typing import Any, Dict, Iterable, List, Sequence
 import pandas as pd
 
 from api.config import get_settings
+from api.artifacts import get_feature_defaults
 
 
 def _load_jsonl(path: Path) -> Iterable[Dict[str, Any]]:
@@ -36,7 +37,9 @@ def load_logs_df(log_dir: str | Path | None = None, max_days: int = 7) -> pd.Dat
     records: List[Dict[str, Any]] = []
     for log_file in sorted(base.glob("*.jsonl"), reverse=True):
         try:
-            file_date = datetime.strptime(log_file.stem, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            file_date = datetime.strptime(log_file.stem, "%Y-%m-%d").replace(
+                tzinfo=timezone.utc
+            )
         except ValueError:
             continue
         if file_date < cutoff:
@@ -77,19 +80,57 @@ def load_logs_df(log_dir: str | Path | None = None, max_days: int = 7) -> pd.Dat
 
     df = pd.DataFrame.from_records(records)
     df.sort_values("timestamp", inplace=True)
+    df = df.copy()
+
+    defaults = get_feature_defaults()
+    fill_values = {
+        column: float(defaults[column]) for column in defaults if column in df.columns
+    }
+
+    for column, value in fill_values.items():
+        if column not in df.columns:
+            continue
+        series = df[column]
+        if series.isna().all():
+            df[column] = float(value)
+        else:
+            df[column] = series.fillna(value)
+
     return df
 
 
-def load_reference_sample(path: str | Path | None = None, columns: Sequence[str] | None = None) -> pd.DataFrame:
+def load_reference_sample(
+    path: str | Path | None = None, columns: Sequence[str] | None = None
+) -> pd.DataFrame:
     settings = get_settings()
-    reference_path = Path(path or (Path(settings.reference_dir) / "reference_sample.parquet"))
+    reference_path = Path(
+        path or (Path(settings.reference_dir) / "reference_sample.parquet")
+    )
     if not reference_path.exists():
         return pd.DataFrame()
     df = pd.read_parquet(reference_path)
     if columns:
         existing = [column for column in columns if column in df.columns]
         if existing:
-            return df[existing]
+            df = df[existing].copy()
+        else:
+            df = df.copy()
+    else:
+        df = df.copy()
+
+    defaults = get_feature_defaults()
+    fill_values = {
+        column: float(defaults[column]) for column in defaults if column in df.columns
+    }
+    for column, value in fill_values.items():
+        if column not in df.columns:
+            continue
+        series = df[column]
+        if series.isna().all():
+            df[column] = float(value)
+        else:
+            df[column] = series.fillna(value)
+
     return df
 
 

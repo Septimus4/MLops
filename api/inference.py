@@ -31,11 +31,15 @@ def _coerce_numeric(value: object) -> float:
         try:
             return float(cleaned)
         except ValueError as exc:  # pragma: no cover - defensive guard
-            raise FeatureValidationError(f"Cannot coerce value '{value}' to float") from exc
+            raise FeatureValidationError(
+                f"Cannot coerce value '{value}' to float"
+            ) from exc
     raise FeatureValidationError(f"Unsupported value type: {type(value)!r}")
 
 
-def _apply_categorical_mapping(feature: str, raw_value: object, mappings: Dict[str, Dict[str, int]]) -> float:
+def _apply_categorical_mapping(
+    feature: str, raw_value: object, mappings: Dict[str, Dict[str, int]]
+) -> float:
     mapping = mappings.get(feature)
     if mapping is None:
         return _coerce_numeric(raw_value)
@@ -43,13 +47,17 @@ def _apply_categorical_mapping(feature: str, raw_value: object, mappings: Dict[s
     if isinstance(raw_value, str):
         key = raw_value.strip()
         if key not in mapping:
-            raise FeatureValidationError(f"Unknown category '{raw_value}' for feature '{feature}'")
+            raise FeatureValidationError(
+                f"Unknown category '{raw_value}' for feature '{feature}'"
+            )
         return float(mapping[key])
 
     if isinstance(raw_value, (int, float, np.integer, np.floating)):
         return float(raw_value)
 
-    raise FeatureValidationError(f"Unsupported categorical value type for {feature}: {type(raw_value)!r}")
+    raise FeatureValidationError(
+        f"Unsupported categorical value type for {feature}: {type(raw_value)!r}"
+    )
 
 
 def _recompute_derived(features: Dict[str, float]) -> None:
@@ -95,11 +103,15 @@ def prepare_features(payload: InputPayload) -> OrderedDict[str, float]:
     mappings = get_categorical_mappings()
     feature_order = get_feature_list()
 
-    prepared: Dict[str, float] = {feature: float(defaults.get(feature, 0.0)) for feature in feature_order}
+    prepared: Dict[str, float] = {
+        feature: float(defaults.get(feature, 0.0)) for feature in feature_order
+    }
 
     for feature, raw_value in payload.features.items():
         if feature not in prepared:
-            raise FeatureValidationError(f"Feature '{feature}' not recognised by the model schema")
+            raise FeatureValidationError(
+                f"Feature '{feature}' not recognised by the model schema"
+            )
         prepared[feature] = _apply_categorical_mapping(feature, raw_value, mappings)
 
     _recompute_derived(prepared)
@@ -109,11 +121,15 @@ def prepare_features(payload: InputPayload) -> OrderedDict[str, float]:
         if value is None or (isinstance(value, float) and math.isnan(value)):
             prepared[key] = 0.0
 
-    ordered = OrderedDict((feature, float(prepared[feature])) for feature in feature_order)
+    ordered = OrderedDict(
+        (feature, float(prepared[feature])) for feature in feature_order
+    )
     return ordered
 
 
-def predict_one(payload: InputPayload, model: xgb.Booster) -> Tuple[Dict[str, float], float, Dict[str, float]]:
+def predict_one(
+    payload: InputPayload, model: xgb.Booster
+) -> Tuple[Dict[str, float], float, Dict[str, float]]:
     """Generate a prediction and return processed feature values used for scoring."""
 
     ordered_features = prepare_features(payload)
@@ -122,5 +138,9 @@ def predict_one(payload: InputPayload, model: xgb.Booster) -> Tuple[Dict[str, fl
     score = float(model.predict(matrix)[0])
 
     settings = get_settings()
-    monitor_feats = {name: ordered_features[name] for name in settings.monitor_features if name in ordered_features}
+    monitor_feats = {
+        name: ordered_features[name]
+        for name in settings.monitor_features
+        if name in ordered_features
+    }
     return ordered_features, score, monitor_feats

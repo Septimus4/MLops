@@ -16,11 +16,13 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -e .[dev]
+      - name: Check formatting
+        run: ruff format --check .
       - name: Lint
         run: ruff check api monitor scripts tests
       - name: Run tests
-        run: pytest -q --cov=api --cov=monitor
+        run: pytest -q --cov=api --cov=monitor --cov-report=term-missing
       - name: Build API image
         run: docker build -t home-credit-api .
       - name: Build monitor image

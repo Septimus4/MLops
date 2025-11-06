@@ -45,13 +45,17 @@ def _resolve_model_from_registry(settings) -> Tuple[Path, Dict[str, Any]]:
         raise ModelLoadError(f"Model {settings.model_name} not found in registry")
 
     if settings.model_version:
-        candidate = next((m for m in models if m.get("version") == settings.model_version), None)
+        candidate = next(
+            (m for m in models if m.get("version") == settings.model_version), None
+        )
         if not candidate:
             raise ModelLoadError(
                 f"Version {settings.model_version} not available for model {settings.model_name}"
             )
     else:
-        candidate = sorted(models, key=lambda item: item.get("registered_at", ""), reverse=True)[0]
+        candidate = sorted(
+            models, key=lambda item: item.get("registered_at", ""), reverse=True
+        )[0]
 
     model_path = Path(candidate.get("model_path", "")).expanduser()
     if not model_path.is_absolute():
@@ -60,7 +64,9 @@ def _resolve_model_from_registry(settings) -> Tuple[Path, Dict[str, Any]]:
             model_path = candidate_path
         else:
             # Handle registry entries that already include the registry directory
-            project_relative = (Path(settings.model_registry_path).parent / model_path).resolve()
+            project_relative = (
+                Path(settings.model_registry_path).parent / model_path
+            ).resolve()
             model_path = project_relative
     return model_path, candidate
 

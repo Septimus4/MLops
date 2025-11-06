@@ -12,9 +12,15 @@ from pydantic import BaseModel, Field, ConfigDict, model_validator
 class InputPayload(BaseModel):
     """Inbound payload for scoring requests."""
 
-    request_id: str = Field(default_factory=lambda: uuid4().hex, description="Idempotency token")
-    applicant_id: Optional[int] = Field(default=None, description="Domain identifier of the applicant")
-    features: Dict[str, Any] = Field(..., description="Key/value feature dictionary aligned with training schema")
+    request_id: str = Field(
+        default_factory=lambda: uuid4().hex, description="Idempotency token"
+    )
+    applicant_id: Optional[int] = Field(
+        default=None, description="Domain identifier of the applicant"
+    )
+    features: Dict[str, Any] = Field(
+        ..., description="Key/value feature dictionary aligned with training schema"
+    )
 
     model_config = ConfigDict(extra="forbid")
 

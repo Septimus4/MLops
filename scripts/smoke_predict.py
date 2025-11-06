@@ -13,8 +13,12 @@ from api.schemas import InputPayload
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Send a smoke-test request to the scoring API")
-    parser.add_argument("--url", default="http://localhost:8080/predict", help="Prediction endpoint URL")
+    parser = argparse.ArgumentParser(
+        description="Send a smoke-test request to the scoring API"
+    )
+    parser.add_argument(
+        "--url", default="http://localhost:8080/predict", help="Prediction endpoint URL"
+    )
     args = parser.parse_args()
 
     defaults = get_feature_defaults()

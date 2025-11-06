@@ -158,6 +158,7 @@ model_registry/
 /data/logs/
 /data/metrics/
 !/data/reference/reference_sample.parquet
+!docs/openapi/openapi.json
 !/data/reference/feature_stats.parquet
 !/data/logs/.gitkeep
 !/data/metrics/.gitkeep

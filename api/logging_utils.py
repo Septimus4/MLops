@@ -83,11 +83,26 @@ def _list_candidate_files(log_dir: Path, since: datetime) -> List[Path]:
     return candidates
 
 
+def _latest_drift_alerts(metrics_dir: Path) -> int:
+    summary_path = metrics_dir / "drift" / "latest_drift_report.json"
+    if not summary_path.exists():
+        return 0
+    try:
+        payload = json.loads(summary_path.read_text())
+    except (json.JSONDecodeError, OSError):  # pragma: no cover - defensive guard
+        return 0
+    alerts = payload.get("drifted_columns")
+    if isinstance(alerts, int) and alerts >= 0:
+        return alerts
+    return 0
+
+
 def aggregate_metrics(window_minutes: int) -> Dict[str, Any]:
     """Aggregate simple metrics over the specified lookback window."""
 
     settings = get_settings()
     log_dir = Path(settings.log_dir)
+    metrics_dir = Path(settings.metrics_dir)
     if not log_dir.exists():
         return {
             "window_minutes": window_minutes,
@@ -96,7 +111,7 @@ def aggregate_metrics(window_minutes: int) -> Dict[str, Any]:
             "avg_latency_ms": 0.0,
             "p95_latency_ms": 0.0,
             "mean_score": 0.0,
-            "drift_alerts": 0,
+            "drift_alerts": _latest_drift_alerts(metrics_dir),
         }
 
     now = datetime.now(tz=timezone.utc)
@@ -146,5 +161,5 @@ def aggregate_metrics(window_minutes: int) -> Dict[str, Any]:
         "avg_latency_ms": avg_latency,
         "p95_latency_ms": p95_latency,
         "mean_score": mean_score,
-        "drift_alerts": 0,
+        "drift_alerts": _latest_drift_alerts(metrics_dir),
     }
