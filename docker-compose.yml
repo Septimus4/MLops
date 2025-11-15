@@ -1,0 +1,71 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    image: mlops2-api:latest
+    container_name: mlops2-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data/artifacts:/app/data/artifacts
+    environment:
+      - PYTHONUNBUFFERED=1
+      - MODEL_PATH=/app/data/artifacts/home_credit_model.joblib
+      - BASELINE_PATH=/app/data/artifacts/baseline_stats.json
+      - DB_PATH=/app/data/artifacts/predictions.db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+  gradio:
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+    image: mlops2-gradio:latest
+    container_name: mlops2-gradio
+    depends_on:
+      - api
+    ports:
+      - "7860:7860"
+    environment:
+      - API_URL=http://api:8000
+      - PYTHONUNBUFFERED=1
+    command: ["python", "-m", "src.ui.gradio_app"]
+    restart: unless-stopped
+
+  streamlit:
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+    image: mlops2-streamlit:latest
+    container_name: mlops2-streamlit
+    depends_on:
+      - api
+    ports:
+      - "8501:8501"
+    environment:
+      - API_URL=http://api:8000
+      - PYTHONUNBUFFERED=1
+    command: ["streamlit", "run", "src/ui/streamlit_drift.py", "--server.port=8501", "--server.address=0.0.0.0"]
+    restart: unless-stopped
+
+  docs:
+    image: nginx:alpine
+    container_name: mlops2-docs
+    depends_on:
+      - api
+    # Serve pre-built MkDocs static site from ./site (run `mkdocs build` to update)
+    volumes:
+      - ./site:/usr/share/nginx/html:ro
+    ports:
+      - "9001:80"
+    restart: unless-stopped
+
+networks:
+  default:
+    name: mlops2-network
