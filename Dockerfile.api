@@ -17,7 +17,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source code
 COPY src/ ./src/
-COPY data/artifacts/ ./data/artifacts/
+# Create artifacts directory (artifacts may be mounted or provided at runtime)
+RUN mkdir -p ./data/artifacts
 
 # Expose port
 EXPOSE 8000
