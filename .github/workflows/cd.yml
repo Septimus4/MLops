@@ -1,0 +1,73 @@
+name: CD
+
+on:
+  push:
+    branches: [ main ]
+
+env:
+  REGISTRY: ghcr.io
+  REPO: ${{ github.repository }}
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Metadata API
+        id: meta_api
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ env.REPO }}-api
+          tags: |
+            type=sha
+            type=raw,value=latest
+      - name: Build & push API
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.api
+          push: true
+          tags: ${{ steps.meta_api.outputs.tags }}
+          labels: ${{ steps.meta_api.outputs.labels }}
+      - name: Metadata Gradio
+        id: meta_gradio
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ env.REPO }}-gradio
+          tags: |
+            type=sha
+            type=raw,value=latest
+      - name: Build & push Gradio
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.ui
+          push: true
+          tags: ${{ steps.meta_gradio.outputs.tags }}
+          labels: ${{ steps.meta_gradio.outputs.labels }}
+      - name: Metadata Streamlit
+        id: meta_streamlit
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ env.REPO }}-streamlit
+          tags: |
+            type=sha
+            type=raw,value=latest
+      - name: Build & push Streamlit
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.ui
+          push: true
+          tags: ${{ steps.meta_streamlit.outputs.tags }}
+          labels: ${{ steps.meta_streamlit.outputs.labels }}

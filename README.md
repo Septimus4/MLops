@@ -1,131 +1,188 @@
-# Home Credit Risk MLOps System
+# Home Credit MLOps Pipeline & Serving Stack
 
-A complete MLOps implementation for the Home Credit Default Risk prediction, featuring model training, API service, drift monitoring, and comprehensive UI components.
+End-to-end MLOps workflow for the Home Credit Default Risk project, expanded with a production-style scoring API, monitoring dashboard, Docker images, and CI/CD automation.
 
-## 🏗️ Architecture
+The repository now contains two major layers:
 
-This system consists of the following components:
+- **Model Development** (existing): data prep, experimentation, MLflow tracking, Optuna tuning, explainability, and thresholding (`mlops_pipeline.py`, `src/*`).
+- **Production Serving** (new): FastAPI scoring service with structured logging, a Gradio manual tester, Streamlit + Evidently monitoring, container builds, automated tests, and GitHub Actions workflows.
 
-- **Training Pipeline**: LightGBM model training with baseline statistics computation
-- **FastAPI Backend**: REST API for predictions and drift monitoring
-- **Gradio UI**: Interactive prediction interface
-- **Streamlit Dashboard**: Real-time drift monitoring visualization
-- **SQLite Database**: Prediction logging for drift analysis
-- **Docker Deployment**: Containerized services with docker-compose orchestration
-- **CI/CD Pipeline**: Automated testing and image publishing to GHCR
+---
 
-## 📁 Repository Structure
+## Quick Start
 
-```
-.
-├── data/
-│   ├── raw/                    # Kaggle CSVs (gitignored)
-│   └── artifacts/              # model + baseline stats (gitignored)
-├── src/
-│   ├── training/               # Model training scripts
-│   ├── service/                # FastAPI backend
-│   ├── ui/                     # Gradio & Streamlit UIs
-│   └── utils/                  # Shared utilities
-├── tests/                      # Test suite
-├── scripts/                    # Demo and utility scripts
-├── docs/                       # MkDocs documentation
-├── Dockerfile.api              # API service container
-├── Dockerfile.ui               # UI services container
-└── docker-compose.yml          # Service orchestration
+### 1. Create a local environment
+
+```zsh
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -U pip
+pip install -e .
+# Optional extras used in monitoring
+pip install -r requirements-monitor.txt
 ```
 
-## 🚀 Quickstart
+### 2. Prepare a model artifact
 
-### 1. Install Dependencies
+Export your preferred model from MLflow or serialize it manually so that the API can read it. Expected layout (default `artifacts/model/`):
 
-```bash
-pip install -r requirements.txt
+```
+artifacts/model/
+├── model.pkl             # Required
+├── preprocessor.pkl      # Optional (any transform with .transform)
+├── metadata.json         # Optional (version, threshold, feature names)
+└── feature_names.json    # Optional list of column names
 ```
 
-### 2. Download Data
+Quick helper for generating a fresh XGBoost artifact with validation-tuned thresholding:
 
-Download the [Home Credit Default Risk dataset](https://www.kaggle.com/c/home-credit-default-risk) from Kaggle and place `application_train.csv` in `data/raw/`.
-
-### 3. Train Model
-
-```bash
-python -m src.training.train_model
-python -m src.training.compute_baseline_stats
+```zsh
+python scripts/export_xgboost_artifact.py --sample-size 0.30 --overwrite
 ```
 
-### 4. Run with Docker Compose
+The command trains on the Home Credit dataset (respecting `--sample-size`), computes AUC/PR metrics, and exports `model.pkl`, `feature_names.json`, and a populated `metadata.json` into `artifacts/model/`.
 
-```bash
-docker-compose up
+Set `MODEL_REGISTRY_PATH` or `MLFLOW_MODEL_URI` in your environment if the artifact lives elsewhere. For quick smoke tests you can enable `ALLOW_STUB_MODEL=1` (loads a deterministic synthetic model).
+
+### 3. Run the FastAPI service
+
+```zsh
+uvicorn api.app:app --host 0.0.0.0 --port 8080 --reload
 ```
 
-Access the services:
-- API: http://localhost:8000
-- API Documentation: http://localhost:8000/docs
-- Gradio UI: http://localhost:7860
-- Streamlit Dashboard: http://localhost:8501
+Endpoints:
 
-### 5. Run Locally (Development)
+- `GET /health` → readiness + model metadata
+- `POST /predict` → validated scoring request
+- `GET /metrics` → recent request volume/latency summary
 
-```bash
-# Terminal 1: Start API
-uvicorn src.service.main:app --reload
+Structured JSONL logs are written to `data/logs/YYYY-MM-DD.jsonl`.
 
-# Terminal 2: Start Gradio UI
-python -m src.ui.gradio_app
+### 4. Launch the Gradio manual tester (optional)
 
-# Terminal 3: Start Streamlit Dashboard
-streamlit run src/ui/streamlit_drift.py
+```zsh
+python -m api.gradio_ui
 ```
 
-## 📊 API Endpoints
+### 5. Launch the monitoring dashboard
 
-- `GET /health` - Health check and model status
-- `POST /predict` - Get risk prediction for a loan application
-- `GET /drift` - Calculate feature drift metrics
-
-Full API documentation available at `/docs` when running the service.
-
-## 🧪 Testing
-
-```bash
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=src tests/
+```zsh
+streamlit run monitor/app.py
 ```
 
-## 📚 Documentation
+The dashboard visualises KPIs, latency trends, score histograms, and (when Evidently is installed) produces HTML drift reports against a reference snapshot stored in `data/reference/`.
 
-Complete documentation (MkDocs) is in `docs/`. To develop locally without clashing with the API (which also uses port 8000), run on an alternate port:
+---
 
-```bash
-mkdocs serve -a 127.0.0.1:9001
+## Docker Images
+
+- `Dockerfile` → multi-stage build for the API (`uvicorn api.app:app`).<br>
+  ```zsh
+  docker build -t scoring-api .
+  docker run -p 8080:8080 -e APP_ENV=prod scoring-api
+  ```
+- `Dockerfile.monitor` → Streamlit + Evidently dashboard.<br>
+  ```zsh
+  docker build -f Dockerfile.monitor -t scoring-monitor .
+  docker run -p 7860:7860 scoring-monitor
+  ```
+
+Both images mount `/app/data/*` for logs, metrics, and reference data. Override `LOG_DIR`, `METRICS_DIR`, or `REFERENCE_DIR` if you bind mount host storage.
+
+---
+
+## Tests
+
+Pytest covers contract validation, inference behaviour, logging, and monitoring helpers.
+
+```zsh
+pytest --cov=api --cov=monitor
 ```
 
-Then visit http://localhost:9001 for the live docs.
+Fixtures isolate log directories and enable the stub model automatically, so the suite runs without heavy artifacts.
 
-To build the static site (output in `site/`):
+---
 
-```bash
-mkdocs build
+## CI/CD Workflows
+
+Located under `.github/workflows/`:
+
+- `ci.yml`
+  - Installs dependencies, runs pytest + coverage, builds/pushes Docker images to GHCR on `main`.
+  - Images are tagged as `ghcr.io/<owner>/<repo>/scoring-api` and `scoring-monitor`.
+- `deploy_spaces.yml`
+  - Prepares bundles for Hugging Face Spaces (Docker for API, Streamlit for monitoring) and uploads them when configured.
+  - For security reasons the job ships with empty `HF_TOKEN`, `HF_SPACE_API`, and `HF_SPACE_MONITOR` environment variables. Populate them via repository or environment secrets and update the workflow to inject them (e.g. replace the blank values in the `env` block).
+
+---
+
+## Data Logging & Monitoring
+
+- **Runtime logs**: `data/logs/YYYY-MM-DD.jsonl`
+  - Fields include `timestamp`, `request_id`, status, customer hash, latency, payload snapshot, and response.
+- **Compaction**: `scripts/compaction.py` converts JSONL logs to Parquet rollups (`data/metrics/daily/`).
+- **Reference snapshots**: `scripts/make_reference_snapshot.py` builds/refreshes the reference dataset used by Evidently.
+- **Smoke testing**: `scripts/smoke_predict.py` issues a demo `/predict` request with canonical payload.
+
+All scripts honour environment variables exposed via `api.config.Settings`.
+
+---
+
+## Repository Structure (excerpt)
+
+```
+api/                  # FastAPI service, logging, schemas, Gradio UI
+monitor/              # Streamlit dashboard + Evidently helpers
+scripts/              # Operational scripts (reference snapshot, compaction, smoke test)
+tests/                # Pytest suite for API + monitoring stack
+Dockerfile            # API container (multi-stage, slim)
+Dockerfile.monitor    # Monitoring container
+.github/workflows/    # CI and Spaces deployment pipelines
+requirements.txt      # API/runtime dependencies
+requirements-monitor.txt  # Monitoring extras (Streamlit + Evidently)
+data/logs|metrics|reference
 ```
 
-You can optionally serve the generated `site/` directory via any static file server or mount it under a FastAPI route for a unified domain.
+Development assets from the original pipeline remain under `src/`, `docs/`, `mlops_pipeline.py`, and `home-credit-default-risk-DATA/`.
 
-## 🐳 Docker Images
+---
 
-Images are automatically built and published to GitHub Container Registry:
+## Configuration
 
-- `ghcr.io/septimus4/mlops2-api:latest`
-- `ghcr.io/septimus4/mlops2-gradio:latest`
-- `ghcr.io/septimus4/mlops2-streamlit:latest`
+`api/config.py` resolves settings from environment variables (and `.env` if present). Key knobs:
 
-## 🔧 Development
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `MODEL_REGISTRY_PATH` | `artifacts/model` | Directory containing `model.pkl` & metadata |
+| `MLFLOW_MODEL_URI` | unset | Load directly from MLflow when provided |
+| `LOG_DIR` | `data/logs` | Destination for JSONL logs |
+| `METRICS_DIR` | `data/metrics` | Aggregated metrics and drift reports |
+| `REFERENCE_DIR` | `data/reference` | Reference dataset for drift |
+| `ALLOW_STUB_MODEL` | `0` | Development fallback model |
 
-See [docs/deployment.md](docs/deployment.md) for detailed deployment instructions and [docs/architecture.md](docs/architecture.md) for system architecture details.
+These variables apply to both the FastAPI app and the monitoring dashboard.
 
-## 📝 License
+---
 
-See [LICENSE](LICENSE) file for details.
+## Development Pipeline
+
+The original experimentation capabilities remain unchanged:
+
+1. Place raw Home Credit CSVs under `home-credit-default-risk-DATA/`.
+2. Run `python mlops_pipeline.py` for the full MLflow-tracked workflow.
+3. Export the best model to `artifacts/model/` (or log to MLflow and reference via URI).
+4. Serve through the new FastAPI layer and observe monitoring output.
+
+---
+
+## Documentation & Further Reading
+
+- `docs/README.md` – requirement mapping and design notes for the training pipeline.
+- `docs/requirements-mapping.md` – detailed rubric alignment.
+- `site/` – static artefacts published during Part 1/2.
+
+---
+
+## License
+
+This project is released under the MIT License (see `LICENSE`).
