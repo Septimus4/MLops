@@ -186,3 +186,39 @@ The original experimentation capabilities remain unchanged:
 ## License
 
 This project is released under the MIT License (see `LICENSE`).
+
+---
+
+## Local Environment Setup Script
+
+For a one-shot automated setup (create virtual env, install dependencies, run tests) you can use the helper script:
+
+```zsh
+chmod +x scripts/setup_env.sh   # first time only (optional)
+./scripts/setup_env.sh
+```
+
+Environment variables you can override:
+
+| Variable | Default    | Purpose |
+| -------- | ---------- | ------- |
+| `PYTHON_BIN` | `python3` | Interpreter to use for creating the venv |
+| `SKIP_TESTS` | `0`        | Set to `1` to skip running the test suite after install |
+
+Manual activation afterwards:
+
+```zsh
+source .venv/bin/activate
+```
+
+If you prefer manual steps:
+
+```zsh
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -U pip setuptools wheel
+pip install -r requirements.txt
+pytest -q   # optional validation
+```
+
+> Note: The repository currently uses a `requirements.txt` instead of a declarative `[project]` section in `pyproject.toml`. Adding one would allow `pip install -e .` editable installs; consider this as a future enhancement.

@@ -239,7 +239,7 @@ async def predict(request: PredictionRequest):
 
 
 @app.get("/drift", response_model=DriftResponse, tags=["Monitoring"])
-async def get_drift_metrics(window_hours: int = 24):
+async def get_drift_metrics(window_hours: int = 24, store: int = 0):
     """
     Get feature drift metrics for the specified time window.
 
@@ -264,6 +264,14 @@ async def get_drift_metrics(window_hours: int = 24):
 
         # Convert to DriftMetric objects
         metrics = [DriftMetric(**metric) for metric in metrics_list]
+
+        # Optionally persist metrics to DB when requested via store=1
+        if store and metrics_list:
+            try:
+                db.log_drift_metrics(metrics_list, window_hours)
+            except Exception as e:
+                # Do not fail the request on persistence errors
+                print(f"Warning: Failed to store drift metrics: {e}")
 
         return DriftResponse(
             window_hours=window_hours,

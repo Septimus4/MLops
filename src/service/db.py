@@ -8,7 +8,7 @@ import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 
 import pandas as pd
 
@@ -153,6 +153,50 @@ def get_prediction_count() -> int:
 
     conn.close()
     return count
+
+
+def log_drift_metrics(metrics: List[Dict], window_hours: int) -> int:
+    """Persist computed drift metrics to the drift_metrics table.
+
+    Args:
+        metrics: List of metric dicts with keys feature_name, mean_train, mean_live, z_score
+        window_hours: The lookback window used to compute the metrics
+
+    Returns:
+        Number of rows inserted
+    """
+    if not metrics:
+        return 0
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    timestamp = datetime.now(timezone.utc).isoformat()
+
+    rows = [
+        (
+            timestamp,
+            m["feature_name"],
+            float(m.get("mean_train", 0.0)),
+            float(m.get("mean_live", 0.0)),
+            float(m.get("z_score", 0.0)),
+            int(window_hours),
+        )
+        for m in metrics
+        if "feature_name" in m
+    ]
+
+    cursor.executemany(
+        """
+        INSERT INTO drift_metrics (timestamp, feature_name, mean_train, mean_live, z_score, window_hours)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        rows,
+    )
+
+    conn.commit()
+    conn.close()
+    return len(rows)
 
 
 # Initialize database on module import
