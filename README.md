@@ -1,112 +1,131 @@
-# Home Credit MLOps Pipeline
+# Home Credit Risk MLOps System
 
-End-to-end, MLflow-tracked MLOps pipeline for the Home Credit Default Risk problem. The pipeline covers data prep, model training with CV, hyperparameter optimization, explainability, business-aligned thresholding, and lightweight deployment to a local model registry.
+A complete MLOps implementation for the Home Credit Default Risk prediction, featuring model training, API service, drift monitoring, and comprehensive UI components.
 
-## Quick Start
+## 🏗️ Architecture
 
-```zsh
-# 1) Create and activate a virtual env
-python3 -m venv .venv
-source .venv/bin/activate
+This system consists of the following components:
 
-# 2) Install dependencies (PEP 621 via pyproject)
-pip install -U pip
-pip install -e .
+- **Training Pipeline**: LightGBM model training with baseline statistics computation
+- **FastAPI Backend**: REST API for predictions and drift monitoring
+- **Gradio UI**: Interactive prediction interface
+- **Streamlit Dashboard**: Real-time drift monitoring visualization
+- **SQLite Database**: Prediction logging for drift analysis
+- **Docker Deployment**: Containerized services with docker-compose orchestration
+- **CI/CD Pipeline**: Automated testing and image publishing to GHCR
 
-# 3) Run the pipeline
-python mlops_pipeline.py
+## 📁 Repository Structure
 
-# 4) (Optional) Open MLflow UI
-mlflow ui --backend-store-uri file:./mlruns -p 5000
+```
+.
+├── data/
+│   ├── raw/                    # Kaggle CSVs (gitignored)
+│   └── artifacts/              # model + baseline stats (gitignored)
+├── src/
+│   ├── training/               # Model training scripts
+│   ├── service/                # FastAPI backend
+│   ├── ui/                     # Gradio & Streamlit UIs
+│   └── utils/                  # Shared utilities
+├── tests/                      # Test suite
+├── scripts/                    # Demo and utility scripts
+├── docs/                       # MkDocs documentation
+├── Dockerfile.api              # API service container
+├── Dockerfile.ui               # UI services container
+└── docker-compose.yml          # Service orchestration
 ```
 
-Python 3.12+ is required (see `pyproject.toml`). If you prefer uv:
+## 🚀 Quickstart
 
-```zsh
-pip install uv
-uv venv --python 3.12
-source .venv/bin/activate
-uv pip install -e .
+### 1. Install Dependencies
+
+```bash
+pip install -r requirements.txt
 ```
 
-## Data Requirements
+### 2. Download Data
 
-- Expected path: `home-credit-default-risk-DATA/` in the repo root
-- Expected files (subset):
-	- `application_train.csv`, `application_test.csv`
-	- `bureau.csv`, `bureau_balance.csv`
-	- `previous_application.csv`, `installments_payments.csv`
-	- `credit_card_balance.csv`, `POS_CASH_balance.csv`
-	- `HomeCredit_columns_description.csv`
+Download the [Home Credit Default Risk dataset](https://www.kaggle.com/c/home-credit-default-risk) from Kaggle and place `application_train.csv` in `data/raw/`.
 
-These are referenced by `src/data_prep/data_prep.py`. If the directory is missing, the pipeline exits with an error.
+### 3. Train Model
 
-## What the Pipeline Does
+```bash
+python -m src.training.train_model
+python -m src.training.compute_baseline_stats
+```
 
-- Data prep and feature engineering with categorical encoding and affordability/stability ratios
-- Train multiple models (LogReg, RandomForest, LightGBM, XGBoost, MLP)
-- Cross-validation across models (GBMs include early stopping)
-- Optuna hyperparameter optimization (tracked in MLflow)
-- Explainability via SHAP (tree/linear) and LIME
-- Business cost–based threshold optimization (FN cost > FP cost)
-- Deployment to a simple on-disk registry (`model_registry/`)
+### 4. Run with Docker Compose
 
-Run orchestration lives in `mlops_pipeline.py`.
+```bash
+docker-compose up
+```
 
-## Project Structure (key paths)
+Access the services:
+- API: http://localhost:8000
+- API Documentation: http://localhost:8000/docs
+- Gradio UI: http://localhost:7860
+- Streamlit Dashboard: http://localhost:8501
 
-- `mlops_pipeline.py`: Orchestrates the full flow and logs to MLflow
-- `src/data_prep/data_prep.py`: Loading, cleaning, feature engineering, splits
-- `src/training/model_training.py`: Training, CV, prediction utilities
-- `src/optimization/hyperparameter_optimization.py`: Optuna studies
-- `src/explainability/model_explainability.py`: SHAP/LIME explainability
-- `src/training/mlflow_config.py`: MLflow utilities (auto-nesting, signatures, datasets)
-- `src/training/thresholding.py`: Cost-based decision threshold optimization
-- `model_registry/`: Saved models and `registry.json`
-- `mlruns/`: MLflow experiment store (local file backend)
-- `docs/`: Short documentation and requirement mapping
+### 5. Run Locally (Development)
 
-## Configuration
+```bash
+# Terminal 1: Start API
+uvicorn src.service.main:app --reload
 
-Adjust the most common knobs directly in code (kept simple on purpose):
+# Terminal 2: Start Gradio UI
+python -m src.ui.gradio_app
 
-- `mlops_pipeline.py`
-	- Sample size: `run_data_preparation(sample_size=0.3)`
-	- Run tags and experiment name
-	- Threshold costs used during optimization: `fn_cost`, `fp_cost`
-- `src/training/model_training.py`
-	- CV folds, model defaults, class weight usage, early stopping parameters
-- `src/optimization/hyperparameter_optimization.py`
-	- Search spaces and number of trials per model
+# Terminal 3: Start Streamlit Dashboard
+streamlit run src/ui/streamlit_drift.py
+```
 
-## Outputs
+## 📊 API Endpoints
 
-- `mlruns/`: runs, params, metrics, artifacts (plots, samples, models)
-- `model_registry/`: production model pickle, `registry.json`, `best_model_summary.json`
-- `mlops_pipeline.log`: pipeline logs (if configured by your environment)
+- `GET /health` - Health check and model status
+- `POST /predict` - Get risk prediction for a loan application
+- `GET /drift` - Calculate feature drift metrics
 
-The final console summary prints best model, CV AUC, features, and deployment status.
+Full API documentation available at `/docs` when running the service.
 
-## Known Notes & Warnings
+## 🧪 Testing
 
-- MLflow deprecation notice for `artifact_path`: non-blocking; future polish may switch to the modern `name=` parameter in logging calls.
-- LogisticRegression convergence warnings can appear with imbalance; benign for this use.
-- SHAP:
-	- Tree SHAP supported and logged
-	- Linear SHAP can emit a 1-D shape warning on some folds; when in doubt, consult LIME outputs
-	- Deep SHAP requires TensorFlow; not installed by default
+```bash
+# Run all tests
+pytest
 
-## Documentation
+# Run with coverage
+pytest --cov=src tests/
+```
 
-- For a concise mapping to the MLOps requirements and short run notes, see `docs/README.md`
-- For a requirement-by-requirement breakdown with code links, see `docs/requirements-mapping.md`
+## 📚 Documentation
 
-## Troubleshooting
+Complete documentation (MkDocs) is in `docs/`. To develop locally without clashing with the API (which also uses port 8000), run on an alternate port:
 
-- Verify your environment: `python --version` shows 3.12+, and you're inside `.venv`
-- Ensure the `home-credit-default-risk-DATA/` directory exists at repo root
-- If SHAP import errors occur, reinstall: `pip install shap==0.48.0 numba==0.61.2 llvmlite==0.44.0`
+```bash
+mkdocs serve -a 127.0.0.1:9001
+```
 
-## License
+Then visit http://localhost:9001 for the live docs.
 
-No license specified. If you intend to distribute, add an appropriate license file.
+To build the static site (output in `site/`):
+
+```bash
+mkdocs build
+```
+
+You can optionally serve the generated `site/` directory via any static file server or mount it under a FastAPI route for a unified domain.
+
+## 🐳 Docker Images
+
+Images are automatically built and published to GitHub Container Registry:
+
+- `ghcr.io/septimus4/mlops2-api:latest`
+- `ghcr.io/septimus4/mlops2-gradio:latest`
+- `ghcr.io/septimus4/mlops2-streamlit:latest`
+
+## 🔧 Development
+
+See [docs/deployment.md](docs/deployment.md) for detailed deployment instructions and [docs/architecture.md](docs/architecture.md) for system architecture details.
+
+## 📝 License
+
+See [LICENSE](LICENSE) file for details.
