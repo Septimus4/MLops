@@ -1,0 +1,162 @@
+{
+  "info": {
+    "_postman_id": "b1c0a2a8-2d8b-4a18-9b9a-7b0f1a221234",
+    "name": "Home Credit Risk API",
+    "description": "Postman collection to smoke-test the FastAPI service: health, predict, and drift endpoints.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8000" }
+  ],
+  "item": [
+    {
+      "name": "GET /health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "health"
+          ]
+        },
+        "description": "Service health and model metadata"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
+              "const json = pm.response.json();",
+              "pm.test(\"Has expected keys\", function () {",
+              "  pm.expect(json).to.have.keys(['status','model_loaded','model_version']);",
+              "});",
+              "pm.test(\"Model is loaded\", function () { pm.expect(json.model_loaded).to.be.oneOf([true, false]); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "POST /predict",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"features\": {\n    \"EXT_SOURCE_1\": 0.6,\n    \"EXT_SOURCE_2\": 0.5,\n    \"EXT_SOURCE_3\": 0.7,\n    \"AMT_CREDIT\": 600000.0,\n    \"AMT_ANNUITY\": 30000.0,\n    \"AMT_INCOME_TOTAL\": 200000.0,\n    \"AMT_GOODS_PRICE\": 550000.0,\n    \"DAYS_BIRTH\": -15000,\n    \"DAYS_EMPLOYED\": -2500,\n    \"DAYS_REGISTRATION\": -5000,\n    \"DAYS_ID_PUBLISH\": -3500,\n    \"REGION_POPULATION_RELATIVE\": 0.025,\n    \"HOUR_APPR_PROCESS_START\": 14,\n    \"OWN_CAR_AGE\": 8.0\n  }\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/predict",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "predict"
+          ]
+        },
+        "description": "Make a loan default prediction with sample features. Missing features are filled with defaults on the server."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
+              "const json = pm.response.json();",
+              "pm.test(\"Has risk_score and predicted_class\", function () {",
+              "  pm.expect(json).to.have.property('risk_score');",
+              "  pm.expect(json).to.have.property('predicted_class');",
+              "});",
+              "pm.test(\"Risk score within [0,1]\", function () {",
+              "  pm.expect(json.risk_score).to.be.within(0, 1);",
+              "});",
+              "pm.test(\"Includes model_version and feature_values\", function () {",
+              "  pm.expect(json).to.have.property('model_version');",
+              "  pm.expect(json).to.have.property('feature_values');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "GET /drift (24h)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/drift?window_hours=24",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "drift"
+          ],
+          "query": [
+            { "key": "window_hours", "value": "24" }
+          ]
+        },
+        "description": "Compute drift metrics for the last 24 hours."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
+              "const json = pm.response.json();",
+              "pm.test(\"Has expected top-level fields\", function () {",
+              "  pm.expect(json).to.have.keys(['window_hours','num_samples','metrics']);",
+              "});",
+              "pm.test(\"Metrics array present\", function () {",
+              "  pm.expect(json.metrics).to.be.an('array');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "GET /",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            ""
+          ]
+        },
+        "description": "Root API info"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
+              "const json = pm.response.json();",
+              "pm.test(\"Has endpoints map\", function () {",
+              "  pm.expect(json).to.have.property('endpoints');",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
